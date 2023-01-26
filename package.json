@@ -1,0 +1,19 @@
+{
+    "name": "apple-EventKit-nodejs-wrapper",
+    "version": "1.0.0",
+    "main": "index.js",
+    "license": "MIT",
+    "scripts": {
+        "tests": "ts-node ./tests/test.ts --inspect-brk=9200",
+        "t": "tsc && node --inspect=127.0.0.1:9200 ./dist/tests/test.js"
+    },
+    "dependencies": {
+        "ffi-napi": "^4.0.3"
+    },
+    "devDependencies": {
+        "@types/ffi-napi": "^4.0.7",
+        "@types/ref": "^0.0.29",
+        "node-mac-permissions": "^2.2.1",
+        "ref-array-napi": "^1.2.2"
+    }
+}
