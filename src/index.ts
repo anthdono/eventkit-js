@@ -2,6 +2,8 @@
 // import ArrayType from "ref-array-napi";
 // import ref from "ref-napi"
 import ffi from "ffi-napi";
+// import ref from "ref-napi";
+import { EKSource, SourceIdentifier } from "./types";
 
 // var ca = ArrayType("char", 15);
 // var ca = ArrayType("char", 10);
@@ -20,29 +22,37 @@ import ffi from "ffi-napi";
 
 export class EventKit {
     private dylib;
-    private dylibSrc = `/Users/anthdono/workspace/apple-EventKit-nodejs-wrapper/native/.build/x86_64-apple-macosx/debug/libnative.dylib`;
+    private dylibSrc =
+        "/Users/anthdono/workspace/apple-EventKit-nodejs-wrapper/native/" +
+        ".build/x86_64-apple-macosx/debug/libnative.dylib";
 
     constructor() {
         this.dylib = ffi.Library(this.dylibSrc, {
             sources: ["bool", ["int", "string"]],
+            getEvents: ["bool", ["string"]],
+            debug: ["bool", ["string"]],
         });
     }
 
+    public debug(sources: [EKSource]): boolean {
+        return this.dylib.debug(JSON.stringify(sources));
+    }
+
+    public getEvents(calendarId: SourceIdentifier): void {
+        this.dylib.getEvents(calendarId);
+    }
+
     // https://developer.apple.com/documentation/eventkit/ekeventstore/1507315-sources
-    public sources() {
+    public sources(): [EKSource] | void {
         const buf = Buffer.alloc(2000);
-        try {
-            // @ts-ignore buffer being passed as string (2nd arg)
-            const success = this.dylib.sources(buf.byteLength, buf);
-            if (success == true) {
-                const response = buf.toString("utf8").split("\x00", 1);
-                const responseAsJSON = JSON.parse(response[0]);
-                return responseAsJSON;
-            } else if (success == false) {
-                throw new Error(buf.toString("utf8"));
-            }
-        } catch (e) {
-            console.log(e);
+        // @ts-ignore buffer being passed as string (2nd arg)
+        const success = this.dylib.sources(buf.byteLength, buf);
+        if (success == true) {
+            const response = buf.toString("utf8").split("\x00", 1);
+            const responseAsJSON = JSON.parse(response[0]);
+            return responseAsJSON as [EKSource];
+        } else if (success == false) {
+            throw new Error(buf.toString("utf8"));
         }
     }
 }

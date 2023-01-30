@@ -4,8 +4,9 @@
     "main": "index.js",
     "license": "MIT",
     "scripts": {
-        "tests": "ts-node ./tests/test.ts --inspect-brk=9200",
-        "t": "tsc && node --inspect=127.0.0.1:9200 ./dist/tests/test.js"
+        "test": "ts-node ./tests/test.ts",
+        "debug": "tsc && node --inspect=127.0.0.1:9200 ./dist/tests/test.js",
+        "runBuild": "cd ~/workspace/apple-EventKit-nodejs-wrapper/native/.build/x86_64-apple-macosx/debug && swift build && yarn run test"
     },
     "dependencies": {
         "ffi-napi": "^4.0.3"

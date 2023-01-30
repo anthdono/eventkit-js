@@ -7,10 +7,17 @@ exports.EventKit = void 0;
 const ffi_napi_1 = __importDefault(require("ffi-napi"));
 class EventKit {
     constructor() {
-        this.dylibSrc = `/Users/anthdono/workspace/apple-EventKit-nodejs-wrapper/native/.build/x86_64-apple-macosx/debug/libnative.dylib`;
+        this.dylibSrc = `
+        /Users/anthdono/workspace/apple-EventKit-nodejs-wrapper/
+        native/.build/x86_64-apple-macosx/debug/libnative.dylib`;
         this.dylib = ffi_napi_1.default.Library(this.dylibSrc, {
             sources: ["bool", ["int", "string"]],
+            createStore: ["bool", []],
         });
+    }
+    createStore() {
+        const success = this.dylib.createStore();
+        return success;
     }
     sources() {
         const buf = Buffer.alloc(2000);
