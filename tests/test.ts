@@ -1,4 +1,5 @@
 import { EventKit } from "../src";
+import { EKSource } from "../src/types";
 // import Permission from "node-mac-permissions";
 // import process from "process";
 
@@ -9,11 +10,16 @@ import { EventKit } from "../src";
         // console.log(process.env)
 
         const eventKit = new EventKit();
-        const sources = eventKit.sources();
-        console.log(sources)
-        if(sources){
-            console.log("asdjlfkaskj")
-            eventKit.debug(sources)
+        let sources: [EKSource] = eventKit.sources();
+        // console.log(sources)
+
+        if (sources) {
+            // sources = sources.filter((src) => src.title == "iCloud") as [
+                // EKSource
+            // ];
+             
+            const x = eventKit.getEvents(sources);
+            console.log(x);
         }
         // const x = eventKit.sources();
         // if (x) {
