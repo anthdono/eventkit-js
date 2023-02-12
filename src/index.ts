@@ -2,8 +2,8 @@ import ffi from "ffi-napi";
 import { EKSource, EKEvent } from "./types";
 import { ioBufferHandler } from "../src/helpers";
 
-export class EventKit {
-    private dylib;
+export class EventKitJS {
+    private dylib: any;
     private dylibSrc =
         "/Users/anthdono/workspace/apple-EventKit-nodejs-wrapper/native/" +
         ".build/x86_64-apple-macosx/debug/libnative.dylib";
@@ -12,8 +12,6 @@ export class EventKit {
         this.dylib = ffi.Library(this.dylibSrc, {
             sources: ["bool", ["int", "string", "string"]],
             getEvents: ["bool", ["int", "string", "string"]],
-            // getEvents: ["bool", ["string", "int", "string"]],
-            // debug: ["bool", ["string"]],
         });
     }
 
@@ -24,7 +22,6 @@ export class EventKit {
         );
     }
 
-    // https://developer.apple.com/documentation/eventkit/ekeventstore/1507315-sources
     public sources(): [EKSource] {
         return ioBufferHandler<undefined, EKSource>(
             this.dylib.sources,
