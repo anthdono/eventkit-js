@@ -4,9 +4,12 @@ import { ioBufferHandler } from "../src/helpers";
 
 export class EventKitJS {
     private dylib: any;
+    // private dylibSrc =
+    //     "/Users/anthdono/workspace/apple-EventKit-nodejs-wrapper/native/" +
+    //     ".build/x86_64-apple-macosx/debug/libnative.dylib";
     private dylibSrc =
-        "/Users/anthdono/workspace/apple-EventKit-nodejs-wrapper/native/" +
-        ".build/x86_64-apple-macosx/debug/libnative.dylib";
+        process.cwd() +
+        "/native/.build/x86_64-apple-macosx/debug/libnative.dylib";
 
     constructor() {
         this.dylib = ffi.Library(this.dylibSrc, {
