@@ -14,11 +14,13 @@ import { describe, expect, test } from "@jest/globals";
         });
 
         describe("EventKitJS", () => {
+
             let eventKit: EventKitJS;
-            test("instantiate wrapper obj", () => {
+            test("instantiate", () => {
                 eventKit = new EventKitJS();
                 expect(eventKit).toBeTruthy()
             });
+
             let sources: [EKSource];
             test("get sources", () => {
                 sources = eventKit.sources();
