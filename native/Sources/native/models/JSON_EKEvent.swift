@@ -1,25 +1,4 @@
-/* pseudo-'type union' for use in generics */
-enum Model: Codable {
-   case ekSource(EKSourceModel)
-   case ekEvent(EKEventModel)
-}
-
-
-// EKSource model
-struct EKSourceModel: Codable {
-    var title: String
-    var sourceType: String
-    var sourceIdentifier: String
-
-    init() {
-        sourceIdentifier = ""
-        sourceType = ""
-        title = ""
-    }
-}
-
-// EKEvent model
-struct EKEventModel: Codable {
+struct JSON_EKEvent: Codable {
     var eventIdentifier: String
     var availability: String
     var startDate: String
@@ -32,7 +11,7 @@ struct EKEventModel: Codable {
     var birhdayContactidentifier: String
     var structuredLocation: String
 
-    // inherited from EKCalendarItem
+    // inherits from EKCalendarItem
     var calendar: String
     var title: String
     var location: String
@@ -63,4 +42,3 @@ struct EKEventModel: Codable {
         url = ""
     }
 }
-

@@ -5,16 +5,16 @@ func represent<T: CustomStringConvertible>(property: T?) -> String {
     return property != nil ? String(describing: property!) : ""
 }
 
-// ek type -> model type
+// ek -> json
 
 // EKSource
-func EkToModel(from: [EKSource]) -> [EKSourceModel] {
-    var to = [EKSourceModel]()
+func EKToJSON(from: [EKSource]) -> [JSON_EKSource] {
+    var to = [JSON_EKSource]()
 
     for ek in from {
-        var model = EKSourceModel()
-        model.sourceType = String(describing: ek.sourceType)
-        model.sourceIdentifier = String(describing: ek.sourceIdentifier)
+        var model = JSON_EKSource()
+        model.sourceType = String(describing: ek.sourceType.rawValue)
+        model.sourceIdentifier = represent(property: ek.sourceIdentifier)
         model.title = ek.title
         to.append(model)
     }
@@ -22,10 +22,10 @@ func EkToModel(from: [EKSource]) -> [EKSourceModel] {
 }
 
 // EKEvent
-func EkToModel(from: [EKEvent]) -> [EKEventModel] {
-    var to = [EKEventModel]()
+func EKToJSON(from: [EKEvent]) -> [JSON_EKEvent] {
+    var to = [JSON_EKEvent]()
     for ek in from {
-        var model = EKEventModel()
+        var model = JSON_EKEvent()
         model.eventIdentifier = represent(property: ek.eventIdentifier)
         model.startDate = represent(property: ek.startDate)
         model.endDate = represent(property: ek.endDate)
@@ -51,13 +51,33 @@ func EkToModel(from: [EKEvent]) -> [EKEventModel] {
     return to
 }
 
-// model type -> ek type
+// EKCalendar
+func EKToJSON(from: Set<EKCalendar>) -> [JSON_EKCalendar] {
+    // copy EKCalendar to JSON_EKCalendar
+    var to = [JSON_EKCalendar]()
+    for ek in from {
+        var model = JSON_EKCalendar()
+        model.calendarIdentifier = represent(property: ek.calendarIdentifier)
+        model.title = represent(property: ek.title)
+        model.type = String(ek.type.rawValue)
+        model.source = EKToJSON(from: [ek.source]).first!
+        model.color = represent(property: ek.cgColor.hashValue)
+        model.allowsContentModifications = ek.allowsContentModifications
+        model.isSubscribed = ek.isSubscribed
+        to.append(model)
+    }
+    return to
+}
 
-func ModelToEk(from: [EKSourceModel]) -> [EKSource] {
+// json -> ek
+
+// EKSource
+func JSONToEK(from: [JSON_EKSource]) -> [EKSource] {
     var to = [EKSource]()
 
     for ek in EKEventStore().sources {
         for model in from {
+            // match EKSource based on sourceIdentifier property
             if model.sourceIdentifier == ek.sourceIdentifier {
                 to.append(ek)
             }
@@ -65,3 +85,4 @@ func ModelToEk(from: [EKSourceModel]) -> [EKSource] {
     }
     return to
 }
+
