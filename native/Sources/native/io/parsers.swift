@@ -52,7 +52,24 @@ func EKToJSON(from: [EKEvent]) -> [JSON_EKEvent] {
 }
 
 // EKCalendar
-func EKToJSON(from: Set<EKCalendar>) -> [JSON_EKCalendar] {
+/* func EKToJSON(from: Set<EKCalendar>) -> [JSON_EKCalendar] { */
+/*     // copy EKCalendar to JSON_EKCalendar */
+/*     var to = [JSON_EKCalendar]() */
+/*     for ek in from { */
+/*         var model = JSON_EKCalendar() */
+/*         model.calendarIdentifier = represent(property: ek.calendarIdentifier) */
+/*         model.title = represent(property: ek.title) */
+/*         model.type = String(ek.type.rawValue) */
+/*         model.source = EKToJSON(from: [ek.source]).first! */
+/*         model.color = represent(property: ek.cgColor.hashValue) */
+/*         model.allowsContentModifications = ek.allowsContentModifications */
+/*         model.isSubscribed = ek.isSubscribed */
+/*         to.append(model) */
+/*     } */
+/*     return to */
+/* } */
+
+func EKToJSON(from: [EKCalendar]) -> [JSON_EKCalendar] {
     // copy EKCalendar to JSON_EKCalendar
     var to = [JSON_EKCalendar]()
     for ek in from {
@@ -85,4 +102,3 @@ func JSONToEK(from: [JSON_EKSource]) -> [EKSource] {
     }
     return to
 }
-

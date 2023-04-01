@@ -14,11 +14,8 @@ func getEvents(
     let startDate = Date(timeIntervalSinceNow: -60 * 60 * 24 * 30)
     let endDate = Date(timeIntervalSinceNow: 60 * 60 * 24 * 30)
     let predicate = store.predicateForEvents(withStart: startDate, end: endDate, calendars: nil)
-
     let ekEvents = store.events(matching: predicate)
-
     let ekEventsAsModel = EKToJSON(from: ekEvents)
-
     return write(size: size, buf: buf, data: ekEventsAsModel, err: "failed to serialize data")
 }
 
@@ -31,8 +28,8 @@ func getSources(
 {
     let sources: [JSON_EKSource] = EKToJSON(from: EKEventStore().sources)
 
-    let eventType = EKEntityType(rawValue: 0)!
-    dump(EKEventStore().calendars(for: eventType))
+    /* let eventType = EKEntityType(rawValue: 0)! */
+    /* dump(EKEventStore().calendars(for: eventType)) */
 
     return write(size: size, buf: buf, data: sources, err: "failed to serialize data")
 }
@@ -72,34 +69,17 @@ func getEventsWithinDateRange(
 //     let res: [JSON_EKCalendar] = EKToJSON(from: x)
 //     return write(size: size, buf: buf, data: res, err: "cock")
 // }
-// 
+//
 
 @_cdecl("getCalendars")
 func getCalendars(
     size: Int16,
     buf: UnsafeMutablePointer<UInt8>,
-    for: Int16
+    entityType: UInt
 ) -> Bool {
+    let calendars: [JSON_EKCalendar] = EKToJSON(from: EKEventStore()
+        .calendars(for: EKEntityType(rawValue: entityType)!)
+    )
 
-    // let tmp: [EKSource] = JSONToEK(from: read(data: source))
-    // let src = tmp[0];
-    let eventType = EKEntityType(rawValue: for)!
-    let x = src.calendars(for: eventType)
-    let res: [JSON_EKCalendar] = EKToJSON(from: x)
-    return write(size: size, buf: buf, data: res, err: "penis")
+    return write(size: size, buf: buf, data: calendars, err: "penis")
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
