@@ -19,8 +19,8 @@ func getEvents(
     return write(size: size, buf: buf, data: ekEventsAsModel, err: "failed to serialize data")
 }
 
-@_cdecl("getSources")
-func getSources(
+@_cdecl("sources")
+func sources(
     size: Int16,
     buf: UnsafeMutablePointer<UInt8>
 )
@@ -71,8 +71,8 @@ func getEventsWithinDateRange(
 // }
 //
 
-@_cdecl("getCalendars")
-func getCalendars(
+@_cdecl("calendars")
+func calendars(
     size: Int16,
     buf: UnsafeMutablePointer<UInt8>,
     entityType: UInt

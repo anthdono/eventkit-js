@@ -10,18 +10,13 @@ const foreignFunctionInterface = ffi.Library(
     process.cwd() + "/native/.build/debug/libnative.dylib",
     {
         // define foreign functions and their args here
-        getSources: 
-            ["bool", 
-            ["int", "string"]],
-        getEvents: 
-            ["bool", 
-            ["int", "string", "string"]],
+        sources: ["bool", ["int", "string"]],
+        getEvents: ["bool", ["int", "string", "string"]],
         getEventsWithinDateRange: [
             "bool",
-            ["int", "string", "string", "string", "string"]],
-        getCalendars: 
-            ["bool", 
-            ["int", "string", "uint"]],
+            ["int", "string", "string", "string", "string"],
+        ],
+        calendars: ["bool", ["int", "string", "uint"]],
         // getCalendarsOfSource: ["bool", ["int", "string", "string"]],
     }
 );
@@ -29,16 +24,18 @@ type ForeignFunction = keyof typeof foreignFunctionInterface;
 // types of foreign functions available to call from native
 // type ForeignFunction = typeof foreignFunctions[keyof typeof foreignFunctions];
 
+// buffer allocation constants
 const maxBufferIncreases = 5;
 const bufferIncreaseMultiplier = 2;
 const initialBufferAllocationSize = 10000;
 
-// Handles foreign function calls and data flow between foreign functions
-// in the 'native' dynamic library
+/**
+ * @description Handles foreign function calls and data flow between foreign functions in the 'native' dynamic library
+ **/
 export function foreignFunctionCaller<returnType>(
     foreignFunction: ForeignFunction,
     foreignFunctionArgs?: Array<any>
-): [returnType] {
+): returnType {
     // mutable variables used in for loop for control flow
     let bufferAllocationSize = initialBufferAllocationSize;
     let successfulWrite = false;
@@ -54,42 +51,18 @@ export function foreignFunctionCaller<returnType>(
         const buffer = Buffer.alloc(bufferAllocationSize);
 
         // if is a getSources call
-        if (foreignFunction == "getSources") {
-            successfulWrite = foreignFunctionInterface.getSources(
+        if (foreignFunction == "sources") {
+            successfulWrite = foreignFunctionInterface.sources(
                 buffer.byteLength,
                 // @ts-ignore
                 buffer
             );
         }
-        // if getEvents call
-        // else if (foreignFunction == "getEvents") {
-        //     if (foreignFunctionArgs == undefined)
-        //         throw new Error("foreign function call expects args");
-        //     successfulWrite = foreignFunctionInterface.getEvents(
-        //         buffer.byteLength,
-        //         // @ts-ignore
-        //         buffer,
-        //         foreignFunctionArgs[0]
-        //     );
-        // }
-        // if getEventsWithinDateRange call
-        // else if (foreignFunction == "getEventsWithinDateRange") {
-        //     if (foreignFunctionArgs == undefined)
-        //         throw new Error("foreign function call expects args");
-        //     successfulWrite = foreignFunctionInterface.getEventsWithinDateRange(
-        //         buffer.byteLength,
-        //         // @ts-ignore
-        //         buffer,
-        //         foreignFunctionArgs[0],
-        //         foreignFunctionArgs[1],
-        //         foreignFunctionArgs[2]
-        //     );
-        // }
         // if getCalendars call
-        else if (foreignFunction == "getCalendars") {
+        else if (foreignFunction == "calendars") {
             if (foreignFunctionArgs == undefined)
                 throw new Error("foreign function call expects args");
-            successfulWrite = foreignFunctionInterface.getCalendars(
+            successfulWrite = foreignFunctionInterface.calendars(
                 buffer.byteLength,
                 // @ts-ignore
                 buffer,
@@ -105,11 +78,10 @@ export function foreignFunctionCaller<returnType>(
             try {
                 const response = buffer.toString("utf8").split("\x00", 1);
                 const responseAsJSON = JSON.parse(response[0]);
-                return responseAsJSON as [returnType];
+                return responseAsJSON as returnType;
             } catch (e) {
                 throw new Error("cannot parse returned empty buffer data");
             }
-            // return this.parseBuffer<model>(buffer);
         }
         // foreign function returned false
         // (often caused by buffer size being too small for the

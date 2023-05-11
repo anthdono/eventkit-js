@@ -1,1 +1,1 @@
-// export { EventKitJS } from "./EventKitJS";
+export { EventKitJS } from "./EventKitJS";
