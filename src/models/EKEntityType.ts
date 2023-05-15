@@ -1,4 +1,4 @@
 export const EKEntityType = {
-    0: "event",
-    1: "reminder",
+    "event" : 0,
+    "reminder": 1
 } as const;

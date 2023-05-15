@@ -1,7 +1,6 @@
-
-export * from "./EKEvent"
-export * from "./EKCalendarEvent"
 export * from "./EKSource"
-export * from "./SearchQuery"
 export * from "./EKCalendar"
 export * from "./EKEntityType"
+export * from "./CStringPointer"
+export * from "./CGColor"
+export * from "./NSPredicate"

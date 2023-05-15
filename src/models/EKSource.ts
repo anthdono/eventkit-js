@@ -1,6 +1,3 @@
-// https://developer.apple.com/documentation/eventkit/eksource
-
-// An abstract superclass that represents the account a calendar belongs to.
 export type EKSource = {
     title: string;
     sourceType: keyof typeof EKSourceType;

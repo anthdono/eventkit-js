@@ -1,4 +1,4 @@
-import { EKSource } from ".";
+import { EKSource, CGColor} from ".";
 
 /**
  * A class that represents a calendar in EventKit.
@@ -7,9 +7,9 @@ import { EKSource } from ".";
 export type EKCalendar = {
     calendarIdentifier: string;
     title: string;
-    source: EKSource;
-    type: {};
     allowsContentModifications: boolean;
-    color: string;
-    sourceIdentifier: string;
+    allowedEntityTypes: number;
+    type: number;
+    source: EKSource;
+    cgColor: CGColor;
 };
