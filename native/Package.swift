@@ -9,17 +9,23 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "native",
+            name: "EventStore",
             type: .dynamic,
-            targets: ["native"]
+            targets: ["EventStore"]
         ),
+        /* .library( */
+        /*     name: "native", */
+        /*     type: .dynamic, */
+        /*     targets: ["native"] */
+        /* ), */
     ],
     dependencies: [
     ],
     targets: [
         .target(
-            name: "native",
-            dependencies: []
+            name: "EventStore",
+            dependencies: [],
+            path: "Sources/"
         ),
     ]
 )

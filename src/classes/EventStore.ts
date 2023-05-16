@@ -7,7 +7,7 @@ import {
     EKCalendar,
     EKEntityType,
     NSPredicate,
-} from "./models";
+} from "../models";
 
 export class EventStore {
     private FFI = ffi.Library(

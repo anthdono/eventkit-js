@@ -2,15 +2,15 @@ echo "---------Building native dylib---------"
 cd ./native
 echo $(swift build)
 
-echo "----------Compiling typescript---------"
+# echo "----------Compiling typescript---------"
 cd ../
-echo $(npx tsc --build)
+# echo $(npx tsc --build)
 
 # echo "----------Executing jest tests---------"
-yarn exec jest --debug
+# yarn exec jest --debug
 
 # echo "---run without jest for swift output---"
-# ts-node tests/debug.ts
+ts-node tests/nonJestTests.ts
 
 
 
