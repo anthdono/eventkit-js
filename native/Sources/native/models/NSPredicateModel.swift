@@ -1,11 +1,11 @@
 struct NSPredicateModel: Codable {
-    let startDate: String?
-    let endDate: String?
+    let startDate: Double?
+    let endDate: Double?
     let calendars: [EKCalendarModel]?
 
     init() {
-        startDate = ""
-        endDate = ""
+        startDate = 0
+        endDate = 0
         calendars = nil
     }
 }

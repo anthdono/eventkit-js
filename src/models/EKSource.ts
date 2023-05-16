@@ -1,16 +1,24 @@
-export type EKSource = {
+import { IAdaptable } from "src/interfaces";
+import { EKSourceType } from ".";
+
+export class EKSource implements IAdaptable {
+    public constructor() {}
+
     title: string;
-    sourceType: keyof typeof EKSourceType;
-    sourceIdentifier: SourceIdentifier;
-};
+    sourceType: (typeof EKSourceType)[keyof typeof EKSourceType];
+    sourceIdentifier: string;
 
-export const EKSourceType = {
-    0: "local",
-    1: "exchange",
-    2: "calDAV",
-    3: "mobileMe",
-    4: "subscribed",
-    5: "birthdays",
-} as const;
+    fromSwiftModel(object: any): EKSource {
+        const result = new EKSource();
 
-export type SourceIdentifier = string;
+        result.title = object["title"];
+        result.sourceType =
+            EKSourceType[object["sourceType"] as keyof typeof EKSourceType];
+        result.sourceIdentifier = object["sourceIdentifier"];
+
+        return result;
+    }
+    toSwiftModel() {
+        throw new Error("Method not implemented.");
+    }
+}

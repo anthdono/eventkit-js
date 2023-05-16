@@ -47,19 +47,43 @@ notes:
 		- [x] implement events(matching: NSPredicate) method
 	 - models
 		 - [x] define a model that represents calendar/reminder permission status
+		 - [x] define CStringPointer
 		 - [x] define EKCalendar
+			 - [ ] implement IAdaptable
+		 - [x] define EKCalendarType
+			 - [x] implement IAdaptable
 		 - [x] define CGColor
+			 - [ ] implement IAdaptable
 		 - [x] define EKSource
+			- [ ] implement IAdaptable
+		 - [x] define EKEntityMask.ts
+			- [x] implement IAdaptable
 		 - [ ] define EKEvent
+			- [ ] implement IAdaptable
 		 - [ ] define EKCalendarItem
+			- [ ] implement IAdaptable
 		 - [x] define NSPredicate
+			- [ ] implement IAdaptable
 		 - [x] define EKEntityType
-	 - models-adapter
-		 - 
-
-
-
-
+			- [ ] implement IAdaptable
+		- [x] define EKSourceType
+			- [x] implement IAdaptable
+		- [ ] potentially define a universal Date Model
+			- [ ] implement IAdaptable
+				- default encoding of swift date model to json is ms since 2001/1/1
+	- interfaces
+		- IAdaptable.ts (for implementing two way conversions between swift types and nodejs types) - each model is responsible for implementing conversion upon their primitive unique fields
+			- [x] define fromSwiftModel(object: any): any
+			- [x] define toSwiftModel(): any
+	-  adapters
+		-  ModelsAdapter.ts
+			- [x] implement static function adaptModelToSwift()
+				- takes model instance as argument, or an array of said model instances
+				- returns resulting new object or array of objects with toSwiftModel applied
+			- [x] implement static function adaptModelFromSwift()
+				- takes new instance of T or [T] as model argument
+				- takes any object or [any object] as object argument
+				- returns instance of T or [T] with fromSwiftModel applied
 
 
 

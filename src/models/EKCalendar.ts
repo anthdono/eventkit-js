@@ -1,15 +1,41 @@
-import { EKSource, CGColor} from ".";
+import { EKSource, CGColor, EKEntityMask, EKSourceType } from ".";
+import { IAdaptable } from "../interfaces";
 
-/**
- * A class that represents a calendar in EventKit.
- * https://developer.apple.com/documentation/eventkit/ekcalendar
- **/
-export type EKCalendar = {
+export class EKCalendar implements IAdaptable {
+
     calendarIdentifier: string;
     title: string;
     allowsContentModifications: boolean;
-    allowedEntityTypes: number;
-    type: number;
+    allowedEntityTypes: (typeof EKEntityMask)[keyof typeof EKEntityMask];
+    type: (typeof EKSourceType)[keyof typeof EKSourceType];
     source: EKSource;
     cgColor: CGColor;
-};
+
+
+    fromSwiftModel(object: any): EKCalendar {
+        const result = new EKCalendar();
+
+        result.calendarIdentifier = object["calendarIdentifier"];
+
+        result.title = object["title"];
+
+        result.allowsContentModifications =
+            object["allowsContentModifications"];
+
+        result.allowedEntityTypes =
+            EKEntityMask[
+                object["allowedEntityTypes"] as keyof typeof EKEntityMask
+            ];
+        result.type = new EKSourceType().fromSwiftModel(object["type"])
+
+        result.source = new EKSource().fromSwiftModel(object["source"]);
+
+        result.cgColor = new CGColor().fromSwiftModel(object["cgColor"])
+
+        return result;
+    }
+
+    toSwiftModel() {
+        throw new Error("Method not implemented.");
+    }
+}

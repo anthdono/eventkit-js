@@ -78,14 +78,10 @@ func events(matching predicateJsonString: UnsafeMutablePointer<CChar>) ->
         }
     }
 
-    let dateFormatter = ISO8601DateFormatter()
-    dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let startDate = dateFormatter.date(from: predicate.startDate!) else {
-        return nil
-    }
-    guard let endDate = dateFormatter.date(from: predicate.endDate!) else {
-        return nil
-    }
+    let startDate = Date(timeIntervalSinceReferenceDate:
+        predicate.startDate!)
+    let endDate = Date(timeIntervalSinceReferenceDate:
+        predicate.endDate!)
 
     let nspredicate = eventstore.predicateForEvents(withStart:
         startDate, end: endDate, calendars: predicateCalendars)

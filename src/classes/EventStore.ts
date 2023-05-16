@@ -1,11 +1,12 @@
 import ffi from "ffi-napi";
 import * as ref from "ref-napi";
+import { ModelsAdapter } from "../adapters";
 
 import {
     CStringPointer,
     EKSource,
     EKCalendar,
-    EKEntityType,
+    EKEntityMask,
     NSPredicate,
 } from "../models";
 
@@ -30,17 +31,23 @@ export class EventStore {
     public sources(): EKSource[] {
         const resultsPointer = this.FFI.sources() as CStringPointer;
         const resultsCString = ref.readCString(resultsPointer);
-        const resultsJSON = JSON.parse(resultsCString) as EKSource[];
+        const resultsJSON = ModelsAdapter.adaptModelFromSwift(
+            [new EKSource()],
+            JSON.parse(resultsCString)
+        );
         this.FFI.freePointer(resultsPointer);
         return resultsJSON;
     }
 
-    public calendars(forEKEntityType: keyof typeof EKEntityType): EKCalendar[] {
+    public calendars(forEKEntityType: EKEntityMask): EKCalendar[] {
         const resultsPointer = this.FFI.calendars(
-            EKEntityType[forEKEntityType]
+            ModelsAdapter.adaptModelToSwift(forEKEntityType)
         ) as CStringPointer;
         const resultsCString = ref.readCString(resultsPointer);
-        const resultsJSON = JSON.parse(resultsCString) as EKCalendar[];
+        const resultsJSON = ModelsAdapter.adaptModelFromSwift(
+            [new EKCalendar()],
+            JSON.parse(resultsCString)
+        );
         this.FFI.freePointer(resultsPointer);
         return resultsJSON;
     }
@@ -50,15 +57,17 @@ export class EventStore {
         endDate: Date,
         calendars?: [EKCalendar]
     ): NSPredicate {
-        return {
-            startDate: startDate,
-            endDate: endDate,
-            calendars: calendars,
-        } as NSPredicate;
+        const result = new NSPredicate();
+        result.startDate = startDate;
+        result.endDate = endDate;
+        result.calendars = calendars;
+        return result;
     }
 
     public events(matching: NSPredicate): any[] {
-        const resultsPointer = this.FFI.events(JSON.stringify(matching));
+        const resultsPointer = this.FFI.events(
+            JSON.stringify(ModelsAdapter.adaptModelToSwift(matching))
+        );
         const resultsCString = ref.readCString(resultsPointer);
         const resultsJSON = JSON.parse(resultsCString) as any[];
         this.FFI.freePointer(resultsPointer);

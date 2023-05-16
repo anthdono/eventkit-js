@@ -1,6 +1,6 @@
 import Permission from "node-mac-permissions";
 import os from "node:os";
-import { EventStore } from "./classes/EventStore";
+import { EventStore } from "./classes";
 import { PermissionsOverview } from "./models/PermissionsOverview";
 
 export class EventKitJS {
@@ -11,7 +11,7 @@ export class EventKitJS {
             throw new Error("EventKitJS only supports macos");
     }
 
-    public static get EventStore() {
+    public static get EventStore(): typeof EventStore {
         this.throwErrorIfOsIsNotDarwin();
         return EventStore;
     }
