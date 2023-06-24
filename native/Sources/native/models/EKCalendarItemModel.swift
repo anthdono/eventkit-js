@@ -8,7 +8,7 @@ protocol EKCalendarItemModel {
     var url: String? { get  }
     var lastModifiedDate: Date? { get }
     var creationDate: Date? { get } 
-    var timeZone: TimeZone? { get  }
+    var timeZone: String? { get  }
     var hasAlarms: Bool { get }
     var hasRecurrenceRules: Bool { get }
     var hasAttendees: Bool { get }

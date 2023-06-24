@@ -20,7 +20,7 @@ struct EKEventModel: Codable, EKCalendarItemModel {
     let url: String?
     let lastModifiedDate: Date?
     let creationDate: Date?
-    let timeZone: TimeZone?
+    let timeZone: String?
     let hasAlarms: Bool
     let hasRecurrenceRules: Bool
     let hasAttendees: Bool 
@@ -71,13 +71,16 @@ struct EKEventModel: Codable, EKCalendarItemModel {
         title = from.title
         location = from.location
         notes = from.notes
-        url = String(describing: from.url)
-        lastModifiedDate = from.lastModifiedDate
-        creationDate = from.creationDate
-        timeZone = from.timeZone
+        url = from.url?.absoluteString
+        lastModifiedDate = from.lastModifiedDate ?? nil
+        creationDate = from.creationDate ?? nil
+        timeZone = from.timeZone?.identifier
         hasAlarms = from.hasAlarms
         hasRecurrenceRules = from.hasRecurrenceRules
         hasAttendees = from.hasAttendees
     }
 
+    // TODO: implement toBuiltin
+    // must parse timeZone from identifier string to timezone object
+    // must parse url from string
 }

@@ -4,6 +4,7 @@ export class ModelsAdapter {
     private constructor() {}
 
     public static adaptModelToSwift<T extends IAdaptable>(object: T): any;
+    public static adaptModelToSwift<T extends IAdaptable>(object: T[]): any;
     public static adaptModelToSwift<T extends IAdaptable>(
         object: T | T[]
     ): any | Array<any> {
