@@ -1,8 +1,8 @@
+import { ModelsAdapter } from "../adapters";
 import { EKSource, CGColor, EKEntityMask, EKSourceType } from ".";
 import { IAdaptable } from "../interfaces";
 
 export class EKCalendar implements IAdaptable {
-
     calendarIdentifier: string;
     title: string;
     allowsContentModifications: boolean;
@@ -10,7 +10,6 @@ export class EKCalendar implements IAdaptable {
     type: (typeof EKSourceType)[keyof typeof EKSourceType];
     source: EKSource;
     cgColor: CGColor;
-
 
     fromSwiftModel(object: any): EKCalendar {
         const result = new EKCalendar();
@@ -26,16 +25,23 @@ export class EKCalendar implements IAdaptable {
             EKEntityMask[
                 object["allowedEntityTypes"] as keyof typeof EKEntityMask
             ];
-        result.type = new EKSourceType().fromSwiftModel(object["type"])
+
+        result.type = ModelsAdapter.adaptModelFromSwift(
+            new EKSourceType(),
+            object["type"]
+        );
+
 
         result.source = new EKSource().fromSwiftModel(object["source"]);
 
-        result.cgColor = new CGColor().fromSwiftModel(object["cgColor"])
+        result.cgColor = new CGColor().fromSwiftModel(object["cgColor"]);
 
         return result;
     }
 
     toSwiftModel() {
-        throw new Error("Method not implemented.");
+        return {
+            calendarIdentifier: this.calendarIdentifier,
+        };
     }
 }

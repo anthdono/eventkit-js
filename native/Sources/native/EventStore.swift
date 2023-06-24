@@ -101,3 +101,20 @@ func events(matching predicateJsonString: UnsafeMutablePointer<CChar>) ->
         return nil
     }
 }
+
+@_cdecl("event")
+func event(withIdentifier identifier: UnsafeMutablePointer<CChar>) ->
+    UnsafeMutablePointer<CChar>?
+{
+    let event = eventstore.event(withIdentifier: String(cString: identifier))
+    if event == nil { return nil }
+    let eventCodable = EKEventModel(from: event!)
+    do {
+        let eventCodableJson = try JSONEncoder().encode(eventCodable)
+        let eventCodableJsonString = String(data: eventCodableJson, encoding: .utf8)
+        let resultsPointer = strdup(eventCodableJsonString)
+        return resultsPointer
+    } catch {
+        return nil
+    }
+}

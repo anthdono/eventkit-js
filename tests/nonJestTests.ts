@@ -9,11 +9,15 @@ import { EKEntityMask } from "../src/models";
     // let sources = eventstore.sources();
     // console.log(sources);
 
-    let datenow = new Date()
-    let datefuture = new Date()
-    datefuture.setMonth(datenow.getMonth() + 1);
-    
-    let predicate = eventstore.predicateForEvents(datenow, datefuture)
-    
-    console.log(eventstore.events(predicate))
+    let datenow = new Date();
+    datenow.setMonth(datenow.getMonth() - 1);
+    let datefuture = new Date();
+    datefuture.setMonth(datenow.getMonth() + 2);
+
+    let predicate = eventstore.predicateForEvents(datenow, datefuture);
+    const events = eventstore.events(predicate);
+    // const event = eventstore.event(events[0].eventIdentifier)
+    const event = eventstore.event("this is a test id")
+    console.log(event)
+
 })();
