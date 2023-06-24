@@ -8,9 +8,10 @@ import {
     EKCalendar,
     EKEntityMask,
     NSPredicate,
+    EKEvent,
 } from "../models";
 
-export class EventStore {
+export class eventStore {
     private FFI = ffi.Library(
         process.cwd() + "/native/.build/debug/libEventStore.dylib",
         {
@@ -19,6 +20,7 @@ export class EventStore {
             sources: [ref.refType(ref.types.CString), []],
             calendars: [ref.refType(ref.types.CString), [ffi.types.int]],
             events: [ref.refType(ref.types.CString), [ffi.types.CString]],
+            event: [ref.refType(ref.types.CString), [ffi.types.CString]],
         }
     );
 
@@ -64,12 +66,27 @@ export class EventStore {
         return result;
     }
 
-    public events(matching: NSPredicate): any[] {
+    public events(matching: NSPredicate): EKEvent[] {
         const resultsPointer = this.FFI.events(
             JSON.stringify(ModelsAdapter.adaptModelToSwift(matching))
         );
         const resultsCString = ref.readCString(resultsPointer);
-        const resultsJSON = JSON.parse(resultsCString) as any[];
+        const resultsJSON = ModelsAdapter.adaptModelFromSwift(
+            [new EKEvent()],
+            JSON.parse(resultsCString)
+        );
+        this.FFI.freePointer(resultsPointer);
+        return resultsJSON;
+    }
+
+    public event(withIdentifier: string): EKEvent | undefined{
+        const resultsPointer = this.FFI.event(withIdentifier) as CStringPointer;
+        if(resultsPointer.isNull()) return undefined
+        const resultsCString = ref.readCString(resultsPointer);
+        const resultsJSON = ModelsAdapter.adaptModelFromSwift(
+            new EKEvent(),
+            JSON.parse(resultsCString)
+        );
         this.FFI.freePointer(resultsPointer);
         return resultsJSON;
     }
