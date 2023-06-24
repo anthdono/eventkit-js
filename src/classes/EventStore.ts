@@ -11,7 +11,7 @@ import {
     EKEvent,
 } from "../models";
 
-export class eventStore {
+export class EventStore {
     private FFI = ffi.Library(
         process.cwd() + "/native/.build/debug/libEventStore.dylib",
         {
