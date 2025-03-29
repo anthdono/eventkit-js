@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - -I$(node -p "require('node-api-headers').include")
+    - -I./node_modules/node-api-headers/include/
+    - -std=c++17
