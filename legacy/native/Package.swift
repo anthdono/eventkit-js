@@ -13,11 +13,6 @@ let package = Package(
             type: .dynamic,
             targets: ["EventStore"]
         ),
-        /* .library( */
-        /*     name: "native", */
-        /*     type: .dynamic, */
-        /*     targets: ["native"] */
-        /* ), */
     ],
     dependencies: [
     ],

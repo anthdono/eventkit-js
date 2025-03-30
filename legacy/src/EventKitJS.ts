@@ -1,7 +1,7 @@
 import Permission from "node-mac-permissions";
 import os from "node:os";
 import { EventStore } from "./classes";
-import { PermissionsOverview } from "./models/PermissionsOverview";
+import { PermissionsOverview } from "./models";
 
 export class EventKitJS {
     private constructor() {}
@@ -17,7 +17,7 @@ export class EventKitJS {
     }
 
     public static async checkPermissions(): Promise<PermissionsOverview> {
-        this.throwErrorIfOsIsNotDarwin();
+        // XXX Should we check if os is darwin here?
         const permissionsOverview = {} as PermissionsOverview;
         permissionsOverview.calendar =
             (await Permission.askForCalendarAccess()) == "authorized";

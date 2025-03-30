@@ -1,7 +1,6 @@
+.nvimlog
 node_modules
+build
+log
 .DS_Store
-yarn.lock
-dist
-.ccls-cache
-.obsidian
-.idea
+diff
