@@ -1,7 +1,5 @@
-// index.js
-
-import { EKSource } from "./EKSource";
-import { EKEventStore } from "./EventKit";
+import { EKSource } from "../src/EKSource";
+import { EKEventStore } from "../src/EventKit";
 
 (async () => {
 
