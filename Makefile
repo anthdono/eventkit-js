@@ -14,4 +14,4 @@ build:
 .PHONY: test
 test: build
 	@echo "testing.."
-	ts-node ./test/index.ts
+	ts-node ./tests/index.ts
