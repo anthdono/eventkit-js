@@ -1,12 +1,13 @@
-// addon.mm
+// addon2.mm
+#include <cstdio>
 #include <node_api.h>
 #include <assert.h>
 #include <iostream>
 #include <EventKit/EKEventStore.h>
 #include <EventKit/EKEvent.h>
 #include <EventKit/EKSource.h>
-
-EKEventStore* eventStore;
+#include <Foundation/Foundation.h>
+#import "TestClass.mm"
 
 napi_value test(napi_env env, napi_callback_info info) {
     napi_status status;
@@ -28,6 +29,31 @@ napi_value test(napi_env env, napi_callback_info info) {
 
 }
 
+napi_value initTest(napi_env env, napi_callback_info info){
+
+    napi_status status;
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    if (argc < 1) {
+        napi_throw_type_error(env, nullptr, "Expected 1 argument (number)");
+        return nullptr;
+    }
+
+    int32_t value;
+    napi_get_value_int32(env, args[0], &value);
+
+    uint64_t id = nextId++;
+    instances[id] = new TestClass(value);
+
+    napi_value result;
+    napi_create_bigint_uint64(env, id, &result);
+    return result;
+
+
+}
+
 
 const char* getEKSourceTypeString(EKSourceType source){
     switch (source) {
@@ -41,9 +67,89 @@ const char* getEKSourceTypeString(EKSourceType source){
     }
 }
 
-napi_value sources(napi_env env, napi_callback_info info){
+napi_value _createEventStoreRef(napi_env env, napi_callback_info info, EKEventStore *eventStore) {
+
     napi_status status;
+    napi_value result;
+
+    napi_get_cb_info(env, info, nullptr, nullptr, &result, nullptr);
+
+    napi_valuetype type;
+    status = napi_typeof(env, result, &type);
+    if (status != napi_ok) {
+        const napi_extended_error_info* error_info;
+        napi_get_last_error_info(env, &error_info);
+        fprintf(stderr, "Error in napi_typeof: %s\n", error_info->error_message);
+        napi_throw_error(env, nullptr, "Failed to determine result type");
+        return nullptr;
+    }
+
+    if (type != napi_object) {
+        napi_throw_error(env, nullptr, "Argument must be a JavaScript object");
+        return nullptr;
+    }
+
+    if (eventStore == nullptr) {
+        napi_throw_error(env, nullptr, "eventStore is null or uninitialized");
+        return nullptr;
+    }
+
+    // EKEventStoreWrapper* wrapper = new EKEventStoreWrapper();
+    // wrapper->eventStore = eventStore;
+
+    status = napi_wrap(env, result, eventStore,
+        [](napi_env env, void* data, void* hint) {
+            (void)(__bridge_transfer EKEventStore *)data;
+        },
+        nullptr, nullptr);
+
+    if (status != napi_ok) {
+        const napi_extended_error_info* error_info;
+        napi_get_last_error_info(env, &error_info);
+        fprintf(stderr, "Error in napi_wrap: %s\n", error_info->error_message);
+        
+        napi_throw_error(env, nullptr, error_info->error_message);
+        
+        return nullptr; 
+    }
+
+    return result;
+}
+
+EKEventStore* _getEventStoreRef(napi_env env, napi_callback_info info){
+    napi_status status;
+    napi_value js_this;
+    status = napi_get_cb_info(env, info, nullptr, nullptr, &js_this, nullptr);
+    assert(status == napi_ok);
+    EKEventStore* result;
+    // status = napi_unwrap(env, js_this, reinterpret_cast<void**>(&result));
+    status = napi_remove_wrap(env, js_this, reinterpret_cast<void**>(&result));
+    assert(status == napi_ok);
+
+    // NSLog(@"Hash: %@", [result self]);
+    assert(status == napi_ok);
+    return result;
+}
+
+std::string _getStringFromNapiValue(napi_env env, napi_value value) {
+    size_t str_size;
+    napi_get_value_string_utf8(env, value, nullptr, 0, &str_size);
+    str_size++; // Account for null terminator
+    char* buffer = new char[str_size];
+    napi_get_value_string_utf8(env, value, buffer, str_size, nullptr);
+    std::string result(buffer);
+    delete[] buffer;
+    return result;
+}
+
+
+napi_value sources(napi_env env, napi_callback_info info){
+
+    napi_status status;
+    EKEventStore *eventStore = _getEventStoreRef(env, info);
     NSArray<EKSource*> *sources = [eventStore sources];
+    // NSLog(@"%@",(unsigned long)[[eventStore sources] count]);
+
     napi_value result;
        status = napi_create_array(env, &result);
        assert(status == napi_ok);
@@ -81,6 +187,7 @@ napi_value sources(napi_env env, napi_callback_info info){
 
 napi_value eventStoreIdentifier(napi_env env, napi_callback_info info){
     napi_status status;
+    EKEventStore *eventStore = _getEventStoreRef(env, info);
     const char *identifier = [[eventStore eventStoreIdentifier] UTF8String];
     napi_value result;
     status = napi_create_string_utf8(env, identifier, NAPI_AUTO_LENGTH, &result);
@@ -89,68 +196,63 @@ napi_value eventStoreIdentifier(napi_env env, napi_callback_info info){
 }
 
 napi_value init(napi_env env, napi_callback_info info) {
-    // napi_status status;
-    eventStore = [[EKEventStore alloc] init];
-    // XXX TODO Implement a cleanup?
-    return nullptr;
+    EKEventStore *eventStore = [[EKEventStore alloc] init];
+    // NSLog(@"Hash: %@", [eventStore self]);
+    napi_value ref = _createEventStoreRef(env, info, eventStore);
+    return ref;
 }
 
 napi_value initWithSources(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_value this_arg;
+    void* data;
+    
+    napi_status status = napi_get_cb_info(env, info, &argc, args, &this_arg, &data);
+    assert(status == napi_ok);
+    
+    bool isArray;
+    status = napi_is_array(env, args[0], &isArray);
+    assert(status == napi_ok && isArray);
+    
+    uint32_t length;
+    status = napi_get_array_length(env, args[0], &length);
+    assert(status == napi_ok);
+    
+    EKEventStore *_eventStore = [[EKEventStore alloc] init];
+    NSArray<EKSource *> *allSources = [_eventStore sources];
+    NSMutableArray<EKSource *> *filteredSources = [[NSMutableArray alloc] init];
+    
+    for (uint32_t i = 0; i < length; i++) {
+        napi_value element;
+        status = napi_get_element(env, args[0], i, &element);
+        assert(status == napi_ok);
+    
+        napi_valuetype type;
+        status = napi_typeof(env, element, &type);
+        assert(status == napi_ok && type == napi_object);
+    
+        napi_value sourceIdentifier;
+        status = napi_get_named_property(env, element, "sourceIdentifier", &sourceIdentifier);
+        assert(status == napi_ok);
+    
+        std::string str = _getStringFromNapiValue(env, sourceIdentifier);
+        
+        for (EKSource *source in allSources) {
+            if ([source.sourceIdentifier isEqualToString:@(str.c_str())]) {
+                [filteredSources addObject:source];
+            }
+        }
+    }
 
-    // size_t argc = 1; // Expecting 1 argument (the array)
-    // napi_value args[1];
-    // napi_value this_arg;
-    // void* data;
-    // 
-    // // Get arguments
-    // napi_status status = napi_get_cb_info(env, info, &argc, args, &this_arg, &data);
-    // assert(status == napi_ok);
-    // 
-    // // Ensure the argument is an array
-    // bool isArray;
-    // napi_is_array(env, args[0], &isArray);
-    // if (!isArray) {
-    //     napi_throw_type_error(env, NULL, "Expected an array as the first argument");
-    //     return NULL;
-    // }
-    // 
-    // // Get the length of the array
-    // uint32_t length;
-    // napi_get_array_length(env, args[0], &length);
-    // printf("Array length: %d\n", length);
-    // 
-    // EKEventStore *store = [EKEventStore init];
-    // NSArray<EKSource*> *allSources = [store sources];
-    // NSArray<EKSource*> *filteredSources;
-    // 
-    // // Iterate over the array
-    // for (uint32_t i = 0; i < length; i++) {
-    //     napi_value element;
-    //     napi_get_element(env, args[0], i, &element);
-    // 
-    //     napi_valuetype type;
-    //     napi_typeof(env, element, &type);
-    //     if (type != napi_object) {
-    //         printf("Element at index %d is not an object\n", i);
-    //         continue;
-    //     }
-    // 
-    //     napi_value sourceIdentifier;
-    //     napi_get_named_property(env, element, "sourceIdentifier", &sourceIdentifier);
-    //     // size_t str_size;
-    //     // napi_get_value_string_utf8(env, sourceIdentifier, NULL, 0, &str_size);
-    // 
-    // 
-    //     // char* name = (char*)malloc(str_size + 1);
-    //     // napi_get_value_string_utf8(env, sourceIdentifier, name, str_size + 1, &str_size);
-    //     // printf("Object %d -> name: %s\n", i, name);
-    //     // free(name);
-    // }
-    // 
-    // // Return undefined
-    // napi_value result;
-    // napi_get_undefined(env, &result);
-    return nullptr;
+    EKEventStore *eventStore = [[EKEventStore alloc] initWithSources:filteredSources];
+    // NSLog(@"Hash: %@", [eventStore self]);
+    napi_value ref = _createEventStoreRef(env, info, eventStore);
+
+    // (void)(__bridge_transfer EKEventStore *)_eventStore;
+    // (void)(__bridge_transfer NSMutableArray *)filteredSources;
+
+    return ref;
 }
 
 // -----------------------------------------------------------------------------
@@ -158,12 +260,23 @@ napi_value initWithSources(napi_env env, napi_callback_info info) {
 napi_value Init(napi_env env, napi_value exports) {
     napi_status status;
 
+    // -------------------------------------------------------------------------
+
     //
     napi_value fnTest;
     status = napi_create_function(env, nullptr, 0, test, nullptr, &fnTest);
     assert(status == napi_ok);
     status = napi_set_named_property(env, exports, "test", fnTest);
     assert(status == napi_ok);
+
+
+    napi_value fnInitTest;
+    status = napi_create_function(env, nullptr, 0, initTest, nullptr, &fnInitTest);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "initTest", fnInitTest);
+    assert(status == napi_ok);
+
+    // -------------------------------------------------------------------------
 
     //
     napi_value fnInit;
