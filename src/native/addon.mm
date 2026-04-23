@@ -101,20 +101,6 @@ napi_value eventStoreIdentifier(napi_env env, napi_callback_info info){
 
     napi_status status;
 
-    // args
-    size_t argc = 1;
-    napi_value args[1];
-    napi_value this_arg;
-    void* data;
-    double id;
-    status = napi_get_value_double(env, args[0], &id);
-    if (status != napi_ok) {
-          napi_throw_type_error(env, nullptr, "Expected a number");
-          return nullptr;
-    }
-
-    // XXX Add eventStoreInstances verification
-
     const char *identifier = [[store eventStoreIdentifier] UTF8String];
     napi_value result;
     status = napi_create_string_utf8(env, identifier, NAPI_AUTO_LENGTH, &result);
@@ -127,18 +113,6 @@ napi_value eventStoreIdentifier(napi_env env, napi_callback_info info){
 napi_value sources(napi_env env, napi_callback_info info){
 
     napi_status status;
-
-    // args
-    size_t argc = 1;
-    napi_value args[1];
-    napi_value this_arg;
-    void* data;
-    double id;
-    status = napi_get_value_double(env, args[0], &id);
-    if (status != napi_ok) {
-          napi_throw_type_error(env, nullptr, "Expected a number");
-          return nullptr;
-    }
 
     NSArray<EKSource*> *sources = [store sources];
     

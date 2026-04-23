@@ -21,9 +21,7 @@ export class EKEventStore {
     public static init(sources?: EKSource[]): EKEventStore {
         let result: EKEventStore;
         if(sources && sources instanceof Array){
-            throw new Error(
-                "Instantiating EKEventStore from sources is not supported"
-            );
+            throw new NotImplemented;
         } else {
             addon.init();
             result = new EKEventStore();
@@ -198,8 +196,7 @@ export class EKEventStore {
     }
 
     get delegateSources(): EKSource[] {
-        return addon.delegateSources();
-
+        throw new NotImplemented;
     }
 
     // -------------------------------------------------------------------------
