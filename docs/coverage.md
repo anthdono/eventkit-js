@@ -26,13 +26,13 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `requestFullAccessToEvents(): Promise<boolean>` | ✅ | — |
 | `requestFullAccessToReminders(): Promise<boolean>` | ✅ | — |
 | `authorizationStatus(forEntityType)` | ✅ | — |
-| `source(withIdentifier)` | 🟡 | Phase 2 |
+| `source(withIdentifier)` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
 | `commit()` | 🟡 | Phase 3 |
 | `reset()` | 🟡 | Phase 3 |
 | `refreshSourcesIfNecessary()` | 🟡 | Phase 3 |
-| `defaultCalendarForNewReminders()` | 🟡 | Phase 2 |
-| `calendars(forEntityType)` | 🟡 | Phase 2 |
-| `calendar(withIdentifier)` | 🟡 | Phase 2 |
+| `defaultCalendarForNewReminders()` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
+| `calendars(forEntityType)` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
+| `calendar(withIdentifier)` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
 | `saveCalendar(c, commit)` | 🟡 | Phase 5 |
 | `removeCalendar(c, commit)` | 🟡 | Phase 5 |
 | `event(withIdentifier)` | 🟡 | Phase 3 |
@@ -54,7 +54,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | Member | Status | Owning instruction |
 |---|---|---|
 | `eventStoreIdentifier` | ✅ | — |
-| `defaultCalendarForNewEvents` | 🟡 | Phase 2 |
+| `defaultCalendarForNewEvents` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
 | `sources` | ✅ | — |
 | `delegateSources` | 🟡 | — (explicitly deferred; no near-term consumer) |
 
@@ -108,7 +108,7 @@ Declared in `src/EKSource.ts`. Populated by the native `sources()` call.
 ## EKCalendar, EKReminder, NSPredicate
 
 Empty shells as of 2026-04-23 (`src/EKCalendar.ts`, `src/EKReminder.ts`, `src/NSPredicate.ts`). Scheduled to grow in the phase where their first consumer lands:
-- `EKCalendar` → Phase 2.
+- `EKCalendar` → [[../vault/instructions/06 - Calendar Read Paths]].
 - `NSPredicate` → Phase 3 (needs an object-identity model — see [[../vault/planning/Native Bridging Model]]).
 - `EKReminder` → Phase 4.
 
