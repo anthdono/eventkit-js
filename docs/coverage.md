@@ -27,27 +27,27 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `requestFullAccessToReminders(): Promise<boolean>` | ✅ | — |
 | `authorizationStatus(forEntityType)` | ✅ | — |
 | `source(withIdentifier)` | ✅ | — |
-| `commit()` | 🟡 | Phase 3 |
-| `reset()` | 🟡 | Phase 3 |
-| `refreshSourcesIfNecessary()` | 🟡 | Phase 3 |
+| `commit()` | 🟡 | Phase 4 (events write) |
+| `reset()` | 🟡 | Phase 4 (events write) |
+| `refreshSourcesIfNecessary()` | 🟡 | Phase 4 (events write) |
 | `defaultCalendarForNewReminders()` | ✅ | — |
 | `calendars(forEntityType)` | ✅ | — |
 | `calendar(withIdentifier)` | ✅ | — |
 | `saveCalendar(c, commit)` | 🟡 | Phase 5 |
 | `removeCalendar(c, commit)` | 🟡 | Phase 5 |
-| `event(withIdentifier)` | 🟡 | Phase 3 |
-| `calendarItem(withIdentifier)` | 🟡 | Phase 3 |
-| `calendarItems(withExternalIdentifier)` | 🟡 | Phase 3 |
-| `enumerateEvents(matching, block): Promise<void>` | 🟡 | Phase 3 |
-| `eventsMatchingPredicate(matching)` | 🟡 | Phase 3 |
+| `event(withIdentifier)` | 🟡 | [[../vault/instructions/07 - Events Read]] |
+| `calendarItem(withIdentifier)` | 🟡 | Phase 3 (08) |
+| `calendarItems(withExternalIdentifier)` | 🟡 | Phase 3 (08) |
+| `enumerateEvents(matching, block): Promise<void>` | 🟡 | Phase 3 — 08 (not yet drafted) |
+| `eventsMatchingPredicate(matching)` | 🟡 | [[../vault/instructions/07 - Events Read]] |
 | `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 4 |
 | `cancelFetchRequest(id)` | 🟡 | Phase 4 |
-| `predicateForEvents(start, end, calendars)` | 🟡 | Phase 3 |
+| `predicateForEvents(start, end, calendars)` | 🟡 | [[../vault/instructions/07 - Events Read]] |
 | `predicateForReminders(inCalendars)` | 🟡 | Phase 4 |
 | `predicateForCompletedReminders(start, end, calendars)` | 🟡 | Phase 4 |
 | `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | Phase 4 |
-| `save(event, span[, commit])` / `save(reminder, commit)` | ❌ | Phase 3, blocked on overload decision in [[../vault/planning/TypeScript API Conventions]] |
-| `remove(event, span[, commit])` / `remove(reminder, commit)` | ❌ | Phase 3, blocked on overload decision in [[../vault/planning/TypeScript API Conventions]] |
+| `save(event, span[, commit])` / `save(reminder, commit)` | ❌ | Phase 4, blocked on overload decision in [[../vault/planning/TypeScript API Conventions]] |
+| `remove(event, span[, commit])` / `remove(reminder, commit)` | ❌ | Phase 4, blocked on overload decision in [[../vault/planning/TypeScript API Conventions]] |
 
 ### Getters
 
