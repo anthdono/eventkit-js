@@ -3,38 +3,33 @@
 import { EKCalendar } from "./EKCalendar";
 import { NotImplemented } from "./NotImplemented";
 import { EKSource } from "./EKSource";
-import { EKEntityType } from "../legacy/src/models";
+import { EKEntityType } from "./EKEntityType";
 import { EKAuthorizationStatus } from "./EKAuthorizationStatus";
 import { EKEvent } from "./EKEvent";
 import { EKCalendarItem } from "./EKCalendarItem";
-import { EKSpan } from "./EKSpan";
-import { EKReminder } from "./EKReminder";
 import { NSPredicate } from "./NSPredicate";
 
 const addon = require("../build/Release/addon");
 
 export class EKEventStore {
 
-    private _id: number;
+    public __brand = "EKEventStore";
 
-
-    private constructor(id: number) {
-        this._id = id;
+    // init
+    public static init(): EKEventStore;
+    public static init(sources: EKSource[]): EKEventStore;
+    public static init(sources?: EKSource[]): EKEventStore {
+        let result: EKEventStore;
+        if(sources && sources instanceof Array){
+            throw new Error(
+                "Instantiating EKEventStore from sources is not supported"
+            );
+        } else {
+            addon.init();
+            result = new EKEventStore();
+        }
+        return result;
     }
-
-    // -------------------------------------------------------------------------
-
-    public static init(): EKEventStore {
-        const id = addon.init();
-        return new EKEventStore(id);
-    }
-
-    public static initWithSources(sources: EKSource[]): EKEventStore {
-        const id = addon.initWithSources(sources);
-        return new EKEventStore(id);
-    }
-
-    // -------------------------------------------------------------------------
 
     public requestWriteOnlyAccessToEvents(completion: Function): boolean {
         throw new NotImplemented;
@@ -55,6 +50,8 @@ export class EKEventStore {
     public static authorizationStatus(forEntityType: EKEntityType): EKAuthorizationStatus {
         throw new NotImplemented;
     }
+
+    // -------------------------------------------------------------------------
 
     public source(withIdentifier: string): EKSource | null {
         throw new NotImplemented;
@@ -107,35 +104,39 @@ export class EKEventStore {
         throw new NotImplemented;
     }
 
-    // throws error
-    public remove(event: EKEvent, span: EKSpan): void {
-        throw new NotImplemented;
-    }
+    // XXX overloading
+    // 
+    // // throws error
+    // public remove(event: EKEvent, span: EKSpan): void {
+    //     throw new NotImplemented;
+    // }
+    // 
+    // // throws error
+    // public remove(event: EKEvent, span: EKSpan, commit: boolean): void {
+    //     throw new NotImplemented;
+    // }
+    // 
+    // // throws error
+    // public remove(reminder: EKReminder, commit: boolean): void {
+    //     throw new NotImplemented;
+    // }
 
-    // throws error
-    public remove(event: EKEvent, span: EKSpan, commit: boolean): void {
-        throw new NotImplemented;
-    }
-
-    // throws error
-    public remove(reminder: EKReminder, commit: boolean): void {
-        throw new NotImplemented;
-    }
-
-    // throws error
-    public save(event: EKEvent, span: EKSpan): void {
-        throw new NotImplemented;
-    }
-
-    // throws error
-    public save(event: EKEvent, span: EKSpan, commit: boolean): void {
-        throw new NotImplemented;
-    }
-
-    // throws error
-    public save(reminder: EKReminder, commit: boolean): void {
-        throw new NotImplemented;
-    }
+    // XXX Overloaded
+    // 
+    // // throws error
+    // public save(event: EKEvent, span: EKSpan): void {
+    //     throw new NotImplemented;
+    // }
+    // 
+    // // throws error
+    // public save(event: EKEvent, span: EKSpan, commit: boolean): void {
+    //     throw new NotImplemented;
+    // }
+    // 
+    // // throws error
+    // public save(reminder: EKReminder, commit: boolean): void {
+    //     throw new NotImplemented;
+    // }
 
     // XXX: returns some enumerable?
     public enumerateEvents(matching: NSPredicate, usingBlock: Function): void {
@@ -185,7 +186,7 @@ export class EKEventStore {
     // -------------------------------------------------------------------------
 
     get eventStoreIdentifier(): string {
-        return addon.eventStoreIdentifier(this._id);
+        return addon.eventStoreIdentifier();
     }
 
     get defaultCalendarForNewEvents(): EKCalendar{
@@ -193,15 +194,14 @@ export class EKEventStore {
     }
 
     get sources(): EKSource[] {
-        return addon.sources(this._id);
+        return addon.sources();
     }
 
     get delegateSources(): EKSource[] {
-        return addon.delegateSources(this._id);
+        return addon.delegateSources();
 
     }
 
     // -------------------------------------------------------------------------
     // -------------------------------------------------------------------------
-
 }

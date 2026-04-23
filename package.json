@@ -1,15 +1,42 @@
 {
-  "name": "eventkit-js",
-  "version": "1.0.0",
-  "scripts": {},
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "node-api-headers": "^1.5.0",
-    "node-gyp": "^11.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.14"
-  }
+    "name": "eventkit-js",
+    "version": "1.0.0",
+    "author": "anthdono",
+    "license": "ISC",
+    "description": "",
+    "scripts": {
+        "build:native": "node-gyp rebuild",
+        "build:ts": "tsc -p .",
+        "build": "npm run build:native && npm run build:ts",
+        "install": "node-gyp rebuild || node-gyp rebuild --fallback-to-build=false",
+        "test": "npx jest"
+    },
+    "dependencies": {
+        "node-api-headers": "^1.5.0",
+        "node-gyp": "^11.1.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.13.14",
+        "jest": "^30.2.0",
+        "ts-jest": "^29.4.5",
+        "typescript": "^5.9.3"
+    },
+    "jest": {
+        "transform": {
+            ".(ts|tsx)": "<rootDir>/node_modules/ts-jest/preprocessor.js"
+        },
+        "testRegex": "(/tests/.*|\\.(test|spec))\\.(ts|tsx|js)$",
+        "moduleFileExtensions": [
+            "ts",
+            "tsx",
+            "js"
+        ]
+    },
+    "gypfile": true,
+    "files": [
+        "lib/**/*",
+        "build/Release/*.node",
+        "native/binding.gyp"
+  ]
+
 }

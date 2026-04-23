@@ -17,3 +17,6 @@ This project exposes Apple's EventKit framework to JavaScript/Typescript
 enabling interaction with Calendars and Reminders from Node.js.
 
 ### XXX TODO
+
+- Library API trys to mimic swift docs 
+https://developer.apple.com/documentation/eventkit/ekevent
