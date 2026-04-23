@@ -14,6 +14,8 @@ if (!isMac) {
     const { EKEntityType } = require("../src/EKEntityType");
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { EKAuthorizationStatus } = require("../src/EKAuthorizationStatus");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { EKCalendarType } = require("../src/EKCalendarType");
 
     describe("EKEventStore native smoke", () => {
         let store: any;
@@ -54,6 +56,45 @@ if (!isMac) {
         it.skip("request full access to events resolves to a boolean (manual)", async () => {
             const granted = await store.requestFullAccessToEvents();
             expect(typeof granted).toBe("boolean");
+        });
+
+        it("calendars(EVENT) returns an array", () => {
+            const cals = store.calendars(EKEntityType.EVENT);
+            expect(Array.isArray(cals)).toBe(true);
+            const allowedTypes = new Set<string>(Object.values(EKCalendarType));
+            for (const c of cals) {
+                expect(typeof c.calendarIdentifier).toBe("string");
+                expect(typeof c.title).toBe("string");
+                expect(allowedTypes.has(c.type)).toBe(true);
+                expect(typeof c.allowsContentModifications).toBe("boolean");
+            }
+        });
+
+        it("calendar(unknown-id) returns null", () => {
+            expect(store.calendar("this-is-not-a-real-calendar-id")).toBeNull();
+        });
+
+        it("calendar(first-known-id) round-trips", () => {
+            const cals = store.calendars(EKEntityType.EVENT);
+            if (cals.length === 0) return;
+            const first = cals[0];
+            const looked = store.calendar(first.calendarIdentifier);
+            expect(looked).not.toBeNull();
+            expect(looked.calendarIdentifier).toBe(first.calendarIdentifier);
+        });
+
+        it("defaultCalendarForNewEvents has the expected shape or is null", () => {
+            const c = store.defaultCalendarForNewEvents;
+            if (c === null) return;
+            expect(typeof c.calendarIdentifier).toBe("string");
+        });
+
+        it("source(first-known-id) round-trips", () => {
+            const sources = store.sources;
+            if (sources.length === 0) return;
+            const first = sources[0];
+            const looked = store.source(first.sourceIdentifier);
+            expect(looked.sourceIdentifier).toBe(first.sourceIdentifier);
         });
     });
 }

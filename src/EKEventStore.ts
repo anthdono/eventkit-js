@@ -54,7 +54,7 @@ export class EKEventStore {
     // -------------------------------------------------------------------------
 
     public source(withIdentifier: string): EKSource | null {
-        throw new NotImplemented;
+        return addon.source(withIdentifier);
     }
 
     // throws error
@@ -71,15 +71,15 @@ export class EKEventStore {
     }
 
     public defaultCalendarForNewReminders(): EKCalendar {
-        throw new NotImplemented;
+        return addon.defaultCalendarForNewReminders();
     }
 
     public calendars(forEntityType: EKEntityType): EKCalendar[] {
-        throw new NotImplemented;
+        return addon.calendars(entityTypeToNative(forEntityType));
     }
 
     public calendar(withIdentifier: string): EKCalendar | null {
-        throw new NotImplemented;
+        return addon.calendar(withIdentifier);
     }
 
     // throws error
@@ -191,8 +191,8 @@ export class EKEventStore {
         return addon.eventStoreIdentifier();
     }
 
-    get defaultCalendarForNewEvents(): EKCalendar{
-        throw new NotImplemented;
+    get defaultCalendarForNewEvents(): EKCalendar {
+        return addon.defaultCalendarForNewEvents();
     }
 
     get sources(): EKSource[] {

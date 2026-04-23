@@ -27,6 +27,45 @@ const char* getEKSourceTypeString(EKSourceType source){
     }
 }
 
+const char* getEKCalendarTypeString(EKCalendarType type) {
+    switch (type) {
+        case EKCalendarTypeLocal: return "Local";
+        case EKCalendarTypeCalDAV: return "CalDAV";
+        case EKCalendarTypeExchange: return "Exchange";
+        case EKCalendarTypeSubscription: return "Subscription";
+        case EKCalendarTypeBirthday: return "Birthday";
+        default: return "Unknown";
+    }
+}
+
+static napi_value _calendarToNapi(napi_env env, EKCalendar* cal) {
+    napi_value obj;
+    napi_status status = napi_create_object(env, &obj);
+    assert(status == napi_ok);
+
+    napi_value calendarIdentifier;
+    napi_create_string_utf8(env, [[cal calendarIdentifier] UTF8String], NAPI_AUTO_LENGTH, &calendarIdentifier);
+    napi_set_named_property(env, obj, "calendarIdentifier", calendarIdentifier);
+
+    napi_value title;
+    napi_create_string_utf8(env, [[cal title] UTF8String], NAPI_AUTO_LENGTH, &title);
+    napi_set_named_property(env, obj, "title", title);
+
+    napi_value type;
+    napi_create_string_utf8(env, getEKCalendarTypeString([cal type]), NAPI_AUTO_LENGTH, &type);
+    napi_set_named_property(env, obj, "type", type);
+
+    napi_value sourceIdentifier;
+    napi_create_string_utf8(env, [[[cal source] sourceIdentifier] UTF8String], NAPI_AUTO_LENGTH, &sourceIdentifier);
+    napi_set_named_property(env, obj, "sourceIdentifier", sourceIdentifier);
+
+    napi_value allowsContentModifications;
+    napi_get_boolean(env, [cal allowsContentModifications], &allowsContentModifications);
+    napi_set_named_property(env, obj, "allowsContentModifications", allowsContentModifications);
+
+    return obj;
+}
+
 std::string _getStringFromNapiValue(napi_env env, napi_value value) {
     size_t str_size;
     napi_get_value_string_utf8(env, value, nullptr, 0, &str_size);
@@ -269,6 +308,103 @@ napi_value sources(napi_env env, napi_callback_info info){
 
 
 
+// -----------------------------------------------------------------------------
+// -------------------------------- Calendars ----------------------------------
+// -----------------------------------------------------------------------------
+
+napi_value calendars(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    int32_t entityType;
+    status = napi_get_value_int32(env, args[0], &entityType);
+    if (status != napi_ok) {
+        napi_throw_type_error(env, nullptr, "Expected entity type as integer");
+        return nullptr;
+    }
+
+    NSArray<EKCalendar*>* cals = [store calendarsForEntityType:(EKEntityType)entityType];
+
+    napi_value result;
+    napi_create_array_with_length(env, [cals count], &result);
+    for (NSUInteger i = 0; i < [cals count]; i++) {
+        napi_set_element(env, result, i, _calendarToNapi(env, cals[i]));
+    }
+    return result;
+}
+
+napi_value calendar(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    std::string id = _getStringFromNapiValue(env, args[0]);
+    EKCalendar* cal = [store calendarWithIdentifier:@(id.c_str())];
+    if (cal == nil) {
+        napi_value n;
+        napi_get_null(env, &n);
+        return n;
+    }
+    return _calendarToNapi(env, cal);
+}
+
+napi_value defaultCalendarForNewEvents(napi_env env, napi_callback_info info) {
+    EKCalendar* cal = [store defaultCalendarForNewEvents];
+    if (cal == nil) {
+        napi_value n;
+        napi_get_null(env, &n);
+        return n;
+    }
+    return _calendarToNapi(env, cal);
+}
+
+napi_value defaultCalendarForNewReminders(napi_env env, napi_callback_info info) {
+    EKCalendar* cal = [store defaultCalendarForNewReminders];
+    if (cal == nil) {
+        napi_value n;
+        napi_get_null(env, &n);
+        return n;
+    }
+    return _calendarToNapi(env, cal);
+}
+
+napi_value source(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    std::string id = _getStringFromNapiValue(env, args[0]);
+    EKSource* s = [store sourceWithIdentifier:@(id.c_str())];
+    if (s == nil) {
+        napi_value n;
+        napi_get_null(env, &n);
+        return n;
+    }
+
+    // Inline for now — matches the existing sources() marshalling style.
+    // Factor into a _sourceToNapi helper next time this file is touched.
+    napi_value obj;
+    napi_create_object(env, &obj);
+
+    napi_value sourceIdentifier;
+    napi_create_string_utf8(env, [[s sourceIdentifier] UTF8String], NAPI_AUTO_LENGTH, &sourceIdentifier);
+    napi_set_named_property(env, obj, "sourceIdentifier", sourceIdentifier);
+
+    napi_value sourceType;
+    napi_create_string_utf8(env, getEKSourceTypeString([s sourceType]), NAPI_AUTO_LENGTH, &sourceType);
+    napi_set_named_property(env, obj, "sourceType", sourceType);
+
+    napi_value title;
+    napi_create_string_utf8(env, [[s title] UTF8String], NAPI_AUTO_LENGTH, &title);
+    napi_set_named_property(env, obj, "title", title);
+
+    return obj;
+}
+
 // XXX Deprecated
 napi_value initWithSources(napi_env env, napi_callback_info info) {
     // size_t argc = 1;
@@ -378,6 +514,41 @@ napi_value Init(napi_env env, napi_value exports) {
     status = napi_create_function(env, nullptr, 0, requestWriteOnlyAccessToEvents, nullptr, &fnRequestWriteOnlyAccessToEvents);
     assert(status == napi_ok);
     status = napi_set_named_property(env, exports, "requestWriteOnlyAccessToEvents", fnRequestWriteOnlyAccessToEvents);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnCalendars;
+    status = napi_create_function(env, nullptr, 0, calendars, nullptr, &fnCalendars);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "calendars", fnCalendars);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnCalendar;
+    status = napi_create_function(env, nullptr, 0, calendar, nullptr, &fnCalendar);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "calendar", fnCalendar);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnDefaultCalendarForNewEvents;
+    status = napi_create_function(env, nullptr, 0, defaultCalendarForNewEvents, nullptr, &fnDefaultCalendarForNewEvents);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "defaultCalendarForNewEvents", fnDefaultCalendarForNewEvents);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnDefaultCalendarForNewReminders;
+    status = napi_create_function(env, nullptr, 0, defaultCalendarForNewReminders, nullptr, &fnDefaultCalendarForNewReminders);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "defaultCalendarForNewReminders", fnDefaultCalendarForNewReminders);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnSource;
+    status = napi_create_function(env, nullptr, 0, source, nullptr, &fnSource);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "source", fnSource);
     assert(status == napi_ok);
 
     return exports;

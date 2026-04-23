@@ -26,13 +26,13 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `requestFullAccessToEvents(): Promise<boolean>` | ✅ | — |
 | `requestFullAccessToReminders(): Promise<boolean>` | ✅ | — |
 | `authorizationStatus(forEntityType)` | ✅ | — |
-| `source(withIdentifier)` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
+| `source(withIdentifier)` | ✅ | — |
 | `commit()` | 🟡 | Phase 3 |
 | `reset()` | 🟡 | Phase 3 |
 | `refreshSourcesIfNecessary()` | 🟡 | Phase 3 |
-| `defaultCalendarForNewReminders()` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
-| `calendars(forEntityType)` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
-| `calendar(withIdentifier)` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
+| `defaultCalendarForNewReminders()` | ✅ | — |
+| `calendars(forEntityType)` | ✅ | — |
+| `calendar(withIdentifier)` | ✅ | — |
 | `saveCalendar(c, commit)` | 🟡 | Phase 5 |
 | `removeCalendar(c, commit)` | 🟡 | Phase 5 |
 | `event(withIdentifier)` | 🟡 | Phase 3 |
@@ -54,7 +54,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | Member | Status | Owning instruction |
 |---|---|---|
 | `eventStoreIdentifier` | ✅ | — |
-| `defaultCalendarForNewEvents` | 🟡 | [[../vault/instructions/06 - Calendar Read Paths]] |
+| `defaultCalendarForNewEvents` | ✅ | — |
 | `sources` | ✅ | — |
 | `delegateSources` | 🟡 | — (explicitly deferred; no near-term consumer) |
 
@@ -105,10 +105,25 @@ Declared in `src/EKSource.ts`. Populated by the native `sources()` call.
 
 ---
 
-## EKCalendar, EKReminder, NSPredicate
+## EKCalendar
 
-Empty shells as of 2026-04-23 (`src/EKCalendar.ts`, `src/EKReminder.ts`, `src/NSPredicate.ts`). Scheduled to grow in the phase where their first consumer lands:
-- `EKCalendar` → [[../vault/instructions/06 - Calendar Read Paths]].
+Declared in `src/EKCalendar.ts`. Populated by `_calendarToNapi` in the native layer.
+
+| Property | Type | Populated by native? |
+|---|---|---|
+| `calendarIdentifier` | `string` | ✅ |
+| `title` | `string` | ✅ |
+| `type` | `EKCalendarType` | ✅ |
+| `sourceIdentifier` | `string` | ✅ |
+| `allowsContentModifications` | `boolean` | ✅ |
+
+Explicitly deferred (scheduled for later phases):
+- `CGColor` — expose as hex string `"#RRGGBB"` when Phase 5 (calendar CRUD) needs it.
+- `allowedEntityTypes` bitmask — defer until a consumer asks.
+
+## EKReminder, NSPredicate
+
+Empty shells as of 2026-04-23 (`src/EKReminder.ts`, `src/NSPredicate.ts`). Scheduled to grow in the phase where their first consumer lands:
 - `NSPredicate` → Phase 3 (needs an object-identity model — see [[../vault/planning/Native Bridging Model]]).
 - `EKReminder` → Phase 4.
 
@@ -128,6 +143,7 @@ Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) a
 | `EKSourceType` | `src/EKSourceType.ts` | const object + `typeof` | `"Local"`, `"Exchange"`, `"CalDAV"`, `"MobileMe"`, `"Subscribed"`, `"Birthdays"` |
 | `EKSpan` | `src/EKSpan.ts` | const object + `typeof` | `"thisEvent"`, `"futureEvents"` |
 | `EKAuthorizationStatus` | `src/EKAuthorizationStatus.ts` | const object + `typeof` | `"fullAccess"`, `"writeOnly"`, `"denied"`, `"notDetermined"`, `"restricted"` |
+| `EKCalendarType` | `src/EKCalendarType.ts` | const object + `typeof` | `"Local"`, `"CalDAV"`, `"Exchange"`, `"Subscription"`, `"Birthday"` |
 
 Convention rationale: see [[../vault/planning/TypeScript API Conventions]].
 
@@ -141,4 +157,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **23** as of 2026-04-23 (down from 28 after Phase 1 authorization wire-up).
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **18** as of 2026-04-23 (down from 23 after Phase 2 calendar read-path wire-up).
