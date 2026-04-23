@@ -74,6 +74,121 @@ static EKEventStore* store;
 // }
 
 // -----------------------------------------------------------------------------
+// ------------------------------- Authorization -------------------------------
+// -----------------------------------------------------------------------------
+
+typedef struct {
+    bool granted;
+    char* errorMessage; // nullptr if no error; strdup'd otherwise
+} AccessResult;
+
+// Runs on the V8 thread after napi_call_threadsafe_function schedules it.
+static void resolveAccessDeferred(napi_env env, napi_value /*js_cb*/, void* context, void* data) {
+    napi_deferred deferred = (napi_deferred)context;
+    AccessResult* r = (AccessResult*)data;
+    if (r->errorMessage) {
+        napi_value err;
+        napi_value msg;
+        napi_create_string_utf8(env, r->errorMessage, NAPI_AUTO_LENGTH, &msg);
+        napi_create_error(env, nullptr, msg, &err);
+        napi_reject_deferred(env, deferred, err);
+        free(r->errorMessage);
+    } else {
+        napi_value granted;
+        napi_get_boolean(env, r->granted, &granted);
+        napi_resolve_deferred(env, deferred, granted);
+    }
+    delete r;
+}
+
+// Shared implementation for Apple's access-request methods: all take a
+// completion block of signature (BOOL granted, NSError* error); this wraps
+// that in a Promise<boolean> that resolves `granted` or rejects with the
+// error's localizedDescription.
+static napi_value _runAccessRequest(
+    napi_env env,
+    const char* resourceNameStr,
+    void (^invokeRequest)(void (^completion)(BOOL, NSError*))
+) {
+    napi_deferred deferred;
+    napi_value promise;
+    napi_status status = napi_create_promise(env, &deferred, &promise);
+    assert(status == napi_ok);
+
+    napi_value resourceName;
+    napi_create_string_utf8(env, resourceNameStr, NAPI_AUTO_LENGTH, &resourceName);
+
+    napi_threadsafe_function tsfn;
+    status = napi_create_threadsafe_function(
+        env, nullptr, nullptr, resourceName,
+        0, 1, nullptr, nullptr, deferred,
+        resolveAccessDeferred, &tsfn
+    );
+    assert(status == napi_ok);
+
+    invokeRequest(^(BOOL granted, NSError* error) {
+        AccessResult* r = new AccessResult{
+            (bool)granted,
+            error ? strdup([[error localizedDescription] UTF8String]) : nullptr,
+        };
+        napi_call_threadsafe_function(tsfn, r, napi_tsfn_blocking);
+        napi_release_threadsafe_function(tsfn, napi_tsfn_release);
+    });
+
+    return promise;
+}
+
+napi_value authorizationStatus(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    int32_t entityType;
+    status = napi_get_value_int32(env, args[0], &entityType);
+    if (status != napi_ok) {
+        napi_throw_type_error(env, nullptr, "Expected entity type as integer");
+        return nullptr;
+    }
+
+    EKAuthorizationStatus st = [EKEventStore authorizationStatusForEntityType:(EKEntityType)entityType];
+    napi_value result;
+    napi_create_int32(env, (int32_t)st, &result);
+    return result;
+}
+
+napi_value requestFullAccessToEvents(napi_env env, napi_callback_info info) {
+    return _runAccessRequest(env, "requestFullAccessToEvents",
+        ^(void (^completion)(BOOL, NSError*)) {
+            [store requestFullAccessToEventsWithCompletion:completion];
+        });
+}
+
+napi_value requestFullAccessToReminders(napi_env env, napi_callback_info info) {
+    return _runAccessRequest(env, "requestFullAccessToReminders",
+        ^(void (^completion)(BOOL, NSError*)) {
+            [store requestFullAccessToRemindersWithCompletion:completion];
+        });
+}
+
+napi_value requestWriteOnlyAccessToEvents(napi_env env, napi_callback_info info) {
+    if (@available(macOS 14.0, *)) {
+        return _runAccessRequest(env, "requestWriteOnlyAccessToEvents",
+            ^(void (^completion)(BOOL, NSError*)) {
+                [store requestWriteOnlyAccessToEventsWithCompletion:completion];
+            });
+    } else {
+        napi_value err, msg;
+        napi_create_string_utf8(env,
+            "requestWriteOnlyAccessToEvents requires macOS 14.0 or later",
+            NAPI_AUTO_LENGTH, &msg);
+        napi_create_error(env, nullptr, msg, &err);
+        napi_throw(env, err);
+        return nullptr;
+    }
+}
+
+// -----------------------------------------------------------------------------
 // --------------------------------- External ----------------------------------
 // -----------------------------------------------------------------------------
 
@@ -236,7 +351,35 @@ napi_value Init(napi_env env, napi_value exports) {
     assert(status == napi_ok);
     status = napi_set_named_property(env, exports, "sources", fnSources);
     assert(status == napi_ok);
-    
+
+    //
+    napi_value fnAuthorizationStatus;
+    status = napi_create_function(env, nullptr, 0, authorizationStatus, nullptr, &fnAuthorizationStatus);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "authorizationStatus", fnAuthorizationStatus);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnRequestFullAccessToEvents;
+    status = napi_create_function(env, nullptr, 0, requestFullAccessToEvents, nullptr, &fnRequestFullAccessToEvents);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "requestFullAccessToEvents", fnRequestFullAccessToEvents);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnRequestFullAccessToReminders;
+    status = napi_create_function(env, nullptr, 0, requestFullAccessToReminders, nullptr, &fnRequestFullAccessToReminders);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "requestFullAccessToReminders", fnRequestFullAccessToReminders);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnRequestWriteOnlyAccessToEvents;
+    status = napi_create_function(env, nullptr, 0, requestWriteOnlyAccessToEvents, nullptr, &fnRequestWriteOnlyAccessToEvents);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "requestWriteOnlyAccessToEvents", fnRequestWriteOnlyAccessToEvents);
+    assert(status == napi_ok);
+
     return exports;
 }
 

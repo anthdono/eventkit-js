@@ -20,3 +20,13 @@ enabling interaction with Calendars and Reminders from Node.js.
 
 - Library API trys to mimic swift docs 
 https://developer.apple.com/documentation/eventkit/ekevent
+
+## Running on macOS 14+
+
+Consuming applications must include `NSCalendarsFullAccessUsageDescription`
+and `NSRemindersFullAccessUsageDescription` keys in the app bundle's
+`Info.plist`, and the binary must be signed. Without these, the
+`request*Access*` methods on `EKEventStore` resolve silently with
+`granted=false` and no system dialog is shown. This applies to any host
+app that ships a Node runtime — the `node` binary itself does not carry
+these keys, so running under bare `node` will never trigger the dialog.

@@ -16,16 +16,16 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 |---|---|---|
 | `init()` | ✅ | — |
 | `init(sources: EKSource[])` | 🟡 | [[../vault/planning/Native Bridging Model]] |
-| `authorizationStatus(forEntityType)` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
+| `authorizationStatus(forEntityType)` | ✅ | — |
 
 ### Instance methods
 
 | Member | Status | Owning instruction |
 |---|---|---|
-| `requestWriteOnlyAccessToEvents(): Promise<boolean>` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
-| `requestFullAccessToEvents(): Promise<boolean>` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
-| `requestFullAccessToReminders(): Promise<boolean>` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
-| `authorizationStatus(forEntityType)` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
+| `requestWriteOnlyAccessToEvents(): Promise<boolean>` | ✅ (macOS 14+; throws on older) | — |
+| `requestFullAccessToEvents(): Promise<boolean>` | ✅ | — |
+| `requestFullAccessToReminders(): Promise<boolean>` | ✅ | — |
+| `authorizationStatus(forEntityType)` | ✅ | — |
 | `source(withIdentifier)` | 🟡 | Phase 2 |
 | `commit()` | 🟡 | Phase 3 |
 | `reset()` | 🟡 | Phase 3 |
@@ -127,7 +127,7 @@ Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) a
 | `EKEntityType` | `src/EKEntityType.ts` | const object + `typeof` | `"event"`, `"reminder"` |
 | `EKSourceType` | `src/EKSourceType.ts` | const object + `typeof` | `"Local"`, `"Exchange"`, `"CalDAV"`, `"MobileMe"`, `"Subscribed"`, `"Birthdays"` |
 | `EKSpan` | `src/EKSpan.ts` | const object + `typeof` | `"thisEvent"`, `"futureEvents"` |
-| `EKAuthorizationStatus` | `src/EKAuthorizationStatus.ts` | const object + `typeof` | `"fullAccess"`, `"writeOnly"` (currently spelled `WRITE_ONY` / `"writeOny"` — scheduled to be corrected in [[../vault/instructions/05 - Authorization Foundation]]), `"denied"`, `"notDetermined"`, `"restricted"` |
+| `EKAuthorizationStatus` | `src/EKAuthorizationStatus.ts` | const object + `typeof` | `"fullAccess"`, `"writeOnly"`, `"denied"`, `"notDetermined"`, `"restricted"` |
 
 Convention rationale: see [[../vault/planning/TypeScript API Conventions]].
 
@@ -141,4 +141,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **28** as of 2026-04-23.
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **23** as of 2026-04-23 (down from 28 after Phase 1 authorization wire-up).

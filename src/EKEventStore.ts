@@ -3,8 +3,8 @@
 import { EKCalendar } from "./EKCalendar";
 import { NotImplemented } from "./NotImplemented";
 import { EKSource } from "./EKSource";
-import { EKEntityType } from "./EKEntityType";
-import { EKAuthorizationStatus } from "./EKAuthorizationStatus";
+import { EKEntityType, _toNative as entityTypeToNative } from "./EKEntityType";
+import { EKAuthorizationStatus, _fromNative as authStatusFromNative } from "./EKAuthorizationStatus";
 import { EKEvent } from "./EKEvent";
 import { EKCalendarItem } from "./EKCalendarItem";
 import { EKReminder } from "./EKReminder";
@@ -31,23 +31,24 @@ export class EKEventStore {
     }
 
     public requestWriteOnlyAccessToEvents(): Promise<boolean> {
-        throw new NotImplemented;
+        return addon.requestWriteOnlyAccessToEvents();
     }
 
     public requestFullAccessToEvents(): Promise<boolean> {
-        throw new NotImplemented;
+        return addon.requestFullAccessToEvents();
     }
 
     public requestFullAccessToReminders(): Promise<boolean> {
-        throw new NotImplemented;
+        return addon.requestFullAccessToReminders();
     }
 
     public authorizationStatus(forEntityType: EKEntityType): EKAuthorizationStatus {
-        throw new NotImplemented;
+        return EKEventStore.authorizationStatus(forEntityType);
     }
 
     public static authorizationStatus(forEntityType: EKEntityType): EKAuthorizationStatus {
-        throw new NotImplemented;
+        const raw = addon.authorizationStatus(entityTypeToNative(forEntityType));
+        return authStatusFromNative(raw);
     }
 
     // -------------------------------------------------------------------------
