@@ -29,7 +29,8 @@
         "moduleFileExtensions": [
             "ts",
             "tsx",
-            "js"
+            "js",
+            "node"
         ]
     },
     "gypfile": true,

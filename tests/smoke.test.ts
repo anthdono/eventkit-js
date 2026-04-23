@@ -111,11 +111,16 @@ if (!isMac) {
             const p = store.predicateForEvents(start, end, cals);
             const events = store.eventsMatchingPredicate(p);
             expect(Array.isArray(events)).toBe(true);
+            // napi_create_date produces Date objects in the addon's realm,
+            // which Jest's instanceof fails to recognise across the vm-context
+            // boundary. Use the internal [[Class]] tag instead.
+            const isDate = (v: any) => Object.prototype.toString.call(v) === "[object Date]";
             for (const e of events) {
                 expect(typeof e.eventIdentifier).toBe("string");
                 expect(typeof e.title).toBe("string");
-                expect(e.startDate).toBeInstanceOf(Date);
-                expect(e.endDate).toBeInstanceOf(Date);
+                expect(isDate(e.startDate)).toBe(true);
+                expect(isDate(e.endDate)).toBe(true);
+                expect(Number.isFinite(e.startDate.getTime())).toBe(true);
                 expect(typeof e.isAllDay).toBe("boolean");
                 expect(typeof e.calendar.calendarIdentifier).toBe("string");
             }
