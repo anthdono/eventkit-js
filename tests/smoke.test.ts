@@ -136,5 +136,46 @@ if (!isMac) {
             expect(looked).not.toBeNull();
             expect(looked.eventIdentifier).toBe(first.eventIdentifier);
         });
+
+        it("enumerateEvents iterates without throwing on empty ranges", async () => {
+            const start = new Date(Date.now() - 2000);
+            const end = new Date(Date.now() - 1000);
+            const p = store.predicateForEvents(start, end, store.calendars(EKEntityType.EVENT));
+
+            const seen: any[] = [];
+            await store.enumerateEvents(p, (e: any) => { seen.push(e); });
+            expect(Array.isArray(seen)).toBe(true);
+        });
+
+        it("enumerateEvents surfaces the same events as eventsMatchingPredicate", async () => {
+            const start = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+            const end = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+            const cals = store.calendars(EKEntityType.EVENT);
+            const p = store.predicateForEvents(start, end, cals);
+
+            const viaMatch = store.eventsMatchingPredicate(p);
+            const viaEnum: any[] = [];
+            await store.enumerateEvents(p, (e: any) => { viaEnum.push(e); });
+
+            expect(viaEnum.length).toBe(viaMatch.length);
+            const idsA = new Set(viaMatch.map((e: any) => e.eventIdentifier));
+            const idsB = new Set(viaEnum.map(e => e.eventIdentifier));
+            expect(idsA.size).toBe(idsB.size);
+            for (const id of idsA) expect(idsB.has(id)).toBe(true);
+        });
+
+        it("enumerateEvents rejects with the thrown value", async () => {
+            const start = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+            const end = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+            const cals = store.calendars(EKEntityType.EVENT);
+            const events = store.eventsMatchingPredicate(store.predicateForEvents(start, end, cals));
+            if (events.length === 0) return;
+
+            const p = store.predicateForEvents(start, end, cals);
+            const sentinel = new Error("aborting on purpose");
+            await expect(
+                store.enumerateEvents(p, () => { throw sentinel; })
+            ).rejects.toBe(sentinel);
+        });
     });
 }

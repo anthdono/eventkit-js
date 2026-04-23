@@ -6,6 +6,7 @@
 #include <EventKit/EKSource.h>
 #include <EventKit/EKCalendarItem.h>
 #include <Foundation/Foundation.h>
+#include <atomic>
 #include <random>
 #include <sstream>
 #include <uuid/uuid.h>
@@ -581,6 +582,121 @@ napi_value event(napi_env env, napi_callback_info info) {
     return _eventToNapi(env, ev);
 }
 
+// -----------------------------------------------------------------------------
+// ----------------------------- Events streaming ------------------------------
+// -----------------------------------------------------------------------------
+
+struct EnumerateState {
+    napi_deferred deferred;
+    napi_ref      blockRef;
+    napi_ref      errorRef;
+    std::atomic<bool> aborted;
+};
+
+struct EventPayload {
+    EKEvent* event;
+};
+
+static void _enumerateCallJs(napi_env env, napi_value /*js_block*/, void* ctx_raw, void* data_raw) {
+    EnumerateState* state = (EnumerateState*)ctx_raw;
+    EventPayload* payload = (EventPayload*)data_raw;
+
+    if (state->aborted.load()) {
+        [payload->event release];
+        delete payload;
+        return;
+    }
+
+    napi_value block, global, jsEvent, result;
+    napi_get_reference_value(env, state->blockRef, &block);
+    napi_get_global(env, &global);
+    jsEvent = _eventToNapi(env, payload->event);
+
+    napi_value argv[1] = { jsEvent };
+    napi_status status = napi_call_function(env, global, block, 1, argv, &result);
+    if (status == napi_pending_exception) {
+        napi_value err;
+        napi_get_and_clear_last_exception(env, &err);
+        napi_create_reference(env, err, 1, &state->errorRef);
+        state->aborted.store(true);
+    }
+
+    [payload->event release];
+    delete payload;
+}
+
+static void _enumerateFinalizer(napi_env env, void* data, void* /*hint*/) {
+    EnumerateState* state = (EnumerateState*)data;
+
+    if (state->errorRef) {
+        napi_value err;
+        napi_get_reference_value(env, state->errorRef, &err);
+        napi_reject_deferred(env, state->deferred, err);
+        napi_delete_reference(env, state->errorRef);
+    } else {
+        napi_value undef;
+        napi_get_undefined(env, &undef);
+        napi_resolve_deferred(env, state->deferred, undef);
+    }
+
+    napi_delete_reference(env, state->blockRef);
+    delete state;
+}
+
+napi_value enumerateEvents(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    NSPredicate* p = _predicateFromExternal(env, args[0]);
+    if (p == nil) return nullptr;
+
+    EnumerateState* state = new EnumerateState();
+    state->errorRef = nullptr;
+    state->aborted = false;
+
+    napi_create_reference(env, args[1], 1, &state->blockRef);
+
+    napi_value promise;
+    napi_create_promise(env, &state->deferred, &promise);
+
+    napi_value resourceName;
+    napi_create_string_utf8(env, "enumerateEvents", NAPI_AUTO_LENGTH, &resourceName);
+
+    napi_threadsafe_function tsfn;
+    napi_create_threadsafe_function(
+        env,
+        /*func=*/       nullptr,
+        /*resource=*/   nullptr,
+        /*name=*/       resourceName,
+        /*queue_max=*/  0,
+        /*threads=*/    1,
+        /*finalize_d=*/ state,
+        /*finalize=*/   _enumerateFinalizer,
+        /*context=*/    state,
+        /*call_js=*/    _enumerateCallJs,
+        &tsfn
+    );
+
+    [p retain];
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [store enumerateEventsMatchingPredicate:p usingBlock:^(EKEvent *event, BOOL *stop) {
+            if (state->aborted.load()) {
+                *stop = YES;
+                return;
+            }
+            EventPayload* payload = new EventPayload{ [event retain] };
+            napi_call_threadsafe_function(tsfn, payload, napi_tsfn_blocking);
+        }];
+        napi_release_threadsafe_function(tsfn, napi_tsfn_release);
+        [p release];
+    });
+
+    return promise;
+}
+
 // XXX Deprecated
 napi_value initWithSources(napi_env env, napi_callback_info info) {
     // size_t argc = 1;
@@ -746,6 +862,13 @@ napi_value Init(napi_env env, napi_value exports) {
     status = napi_create_function(env, nullptr, 0, event, nullptr, &fnEvent);
     assert(status == napi_ok);
     status = napi_set_named_property(env, exports, "event", fnEvent);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnEnumerateEvents;
+    status = napi_create_function(env, nullptr, 0, enumerateEvents, nullptr, &fnEnumerateEvents);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "enumerateEvents", fnEnumerateEvents);
     assert(status == napi_ok);
 
     return exports;

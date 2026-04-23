@@ -38,7 +38,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `event(withIdentifier)` | ✅ | — |
 | `calendarItem(withIdentifier)` | 🟡 | Phase 3 (08) |
 | `calendarItems(withExternalIdentifier)` | 🟡 | Phase 3 (08) |
-| `enumerateEvents(matching, block): Promise<void>` | 🟡 | [[../vault/instructions/08 - Events Streaming]] |
+| `enumerateEvents(matching, block): Promise<void>` | ✅ | — |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
 | `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 4 |
 | `cancelFetchRequest(id)` | 🟡 | Phase 4 |
@@ -155,4 +155,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **15** as of 2026-04-23 (down from 18 after the events-read wire-up in [[../vault/instructions/07 - Events Read]]).
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **14** as of 2026-04-23 (down from 15 after the events-streaming wire-up in [[../vault/instructions/08 - Events Streaming]]).

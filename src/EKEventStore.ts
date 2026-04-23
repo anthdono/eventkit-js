@@ -142,7 +142,7 @@ export class EKEventStore {
         matching: NSPredicate,
         block: (event: EKEvent) => void
     ): Promise<void> {
-        throw new NotImplemented;
+        return addon.enumerateEvents(matching, block);
     }
 
     public eventsMatchingPredicate(matching: NSPredicate): EKEvent[] {
