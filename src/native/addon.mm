@@ -4,6 +4,7 @@
 #include <EventKit/EKEventStore.h>
 #include <EventKit/EKEvent.h>
 #include <EventKit/EKSource.h>
+#include <EventKit/EKCalendar.h>
 #include <EventKit/EKCalendarItem.h>
 #include <Foundation/Foundation.h>
 #include <atomic>
@@ -293,17 +294,37 @@ napi_value authorizationStatus(napi_env env, napi_callback_info info) {
 }
 
 napi_value requestFullAccessToEvents(napi_env env, napi_callback_info info) {
-    return _runAccessRequest(env, "requestFullAccessToEvents",
-        ^(void (^completion)(BOOL, NSError*)) {
-            [store requestFullAccessToEventsWithCompletion:completion];
-        });
+    if (@available(macOS 14.0, *)) {
+        return _runAccessRequest(env, "requestFullAccessToEvents",
+            ^(void (^completion)(BOOL, NSError*)) {
+                [store requestFullAccessToEventsWithCompletion:completion];
+            });
+    } else {
+        napi_value err, msg;
+        napi_create_string_utf8(env,
+            "requestFullAccessToEvents requires macOS 14.0 or later",
+            NAPI_AUTO_LENGTH, &msg);
+        napi_create_error(env, nullptr, msg, &err);
+        napi_throw(env, err);
+        return nullptr;
+    }
 }
 
 napi_value requestFullAccessToReminders(napi_env env, napi_callback_info info) {
-    return _runAccessRequest(env, "requestFullAccessToReminders",
-        ^(void (^completion)(BOOL, NSError*)) {
-            [store requestFullAccessToRemindersWithCompletion:completion];
-        });
+    if (@available(macOS 14.0, *)) {
+        return _runAccessRequest(env, "requestFullAccessToReminders",
+            ^(void (^completion)(BOOL, NSError*)) {
+                [store requestFullAccessToRemindersWithCompletion:completion];
+            });
+    } else {
+        napi_value err, msg;
+        napi_create_string_utf8(env,
+            "requestFullAccessToReminders requires macOS 14.0 or later",
+            NAPI_AUTO_LENGTH, &msg);
+        napi_create_error(env, nullptr, msg, &err);
+        napi_throw(env, err);
+        return nullptr;
+    }
 }
 
 napi_value requestWriteOnlyAccessToEvents(napi_env env, napi_callback_info info) {
@@ -695,60 +716,6 @@ napi_value enumerateEvents(napi_env env, napi_callback_info info) {
     });
 
     return promise;
-}
-
-// XXX Deprecated
-napi_value initWithSources(napi_env env, napi_callback_info info) {
-    // size_t argc = 1;
-    // napi_value args[1];
-    // napi_value this_arg;
-    // void* data;
-    // 
-    // napi_status status = napi_get_cb_info(env, info, &argc, args, &this_arg, &data);
-    // assert(status == napi_ok);
-    // 
-    // bool isArray;
-    // status = napi_is_array(env, args[0], &isArray);
-    // assert(status == napi_ok && isArray);
-    // 
-    // uint32_t length;
-    // status = napi_get_array_length(env, args[0], &length);
-    // assert(status == napi_ok);
-    // 
-    // EKEventStore *_eventStore = [[EKEventStore alloc] init];
-    // NSArray<EKSource *> *allSources = [_eventStore sources];
-    // NSMutableArray<EKSource *> *filteredSources = [[NSMutableArray alloc] init];
-    // 
-    // for (uint32_t i = 0; i < length; i++) {
-    //     napi_value element;
-    //     status = napi_get_element(env, args[0], i, &element);
-    //     assert(status == napi_ok);
-    // 
-    //     napi_valuetype type;
-    //     status = napi_typeof(env, element, &type);
-    //     assert(status == napi_ok && type == napi_object);
-    // 
-    //     napi_value sourceIdentifier;
-    //     status = napi_get_named_property(env, element, "sourceIdentifier", &sourceIdentifier);
-    //     assert(status == napi_ok);
-    // 
-    //     std::string str = _getStringFromNapiValue(env, sourceIdentifier);
-    //     
-    //     for (EKSource *source in allSources) {
-    //         if ([source.sourceIdentifier isEqualToString:@(str.c_str())]) {
-    //             [filteredSources addObject:source];
-    //         }
-    //     }
-    // }
-    // 
-    // EKEventStore *eventStore = [[EKEventStore alloc] initWithSources:filteredSources];
-    // // NSLog(@"Hash: %@", [eventStore self]);
-    // napi_value ref = _createEventStoreRef(env, info, eventStore);
-    // 
-    // // (void)(__bridge_transfer EKEventStore *)_eventStore;
-    // // (void)(__bridge_transfer NSMutableArray *)filteredSources;
-    // 
-    // return ref;
 }
 
 // -----------------------------------------------------------------------------
