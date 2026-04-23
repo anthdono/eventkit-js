@@ -27,9 +27,9 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `requestFullAccessToReminders(): Promise<boolean>` | ✅ | — |
 | `authorizationStatus(forEntityType)` | ✅ | — |
 | `source(withIdentifier)` | ✅ | — |
-| `commit()` | 🟡 | Phase 4 (events write) |
-| `reset()` | 🟡 | Phase 4 (events write) |
-| `refreshSourcesIfNecessary()` | 🟡 | Phase 4 (events write) |
+| `commit()` | 🟡 | [[../vault/instructions/09 - Events Write]] |
+| `reset()` | 🟡 | [[../vault/instructions/09 - Events Write]] |
+| `refreshSourcesIfNecessary()` | 🟡 | [[../vault/instructions/09 - Events Write]] |
 | `defaultCalendarForNewReminders()` | ✅ | — |
 | `calendars(forEntityType)` | ✅ | — |
 | `calendar(withIdentifier)` | ✅ | — |
@@ -46,8 +46,10 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `predicateForReminders(inCalendars)` | 🟡 | Phase 4 |
 | `predicateForCompletedReminders(start, end, calendars)` | 🟡 | Phase 4 |
 | `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | Phase 4 |
-| `save(event, span[, commit])` / `save(reminder, commit)` | ❌ | Phase 4, blocked on overload decision in [[../vault/planning/TypeScript API Conventions]] |
-| `remove(event, span[, commit])` / `remove(reminder, commit)` | ❌ | Phase 4, blocked on overload decision in [[../vault/planning/TypeScript API Conventions]] |
+| `save(event, span[, commit])` | ❌ | [[../vault/instructions/09 - Events Write]] |
+| `save(reminder, commit)` | ❌ | Phase 5 (reminders) |
+| `remove(event, span[, commit])` | ❌ | [[../vault/instructions/09 - Events Write]] |
+| `remove(reminder, commit)` | ❌ | Phase 5 (reminders) |
 
 ### Getters
 
