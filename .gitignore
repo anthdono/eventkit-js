@@ -1,6 +1,8 @@
 .nvimlog
 node_modules
 build
+lib
+*.node
 log
 .DS_Store
 diff
