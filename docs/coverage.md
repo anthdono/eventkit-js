@@ -35,14 +35,14 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `calendar(withIdentifier)` | ✅ | — |
 | `saveCalendar(c, commit)` | 🟡 | Phase 5 |
 | `removeCalendar(c, commit)` | 🟡 | Phase 5 |
-| `event(withIdentifier)` | 🟡 | [[../vault/instructions/07 - Events Read]] |
+| `event(withIdentifier)` | ✅ | — |
 | `calendarItem(withIdentifier)` | 🟡 | Phase 3 (08) |
 | `calendarItems(withExternalIdentifier)` | 🟡 | Phase 3 (08) |
 | `enumerateEvents(matching, block): Promise<void>` | 🟡 | Phase 3 — 08 (not yet drafted) |
-| `eventsMatchingPredicate(matching)` | 🟡 | [[../vault/instructions/07 - Events Read]] |
+| `eventsMatchingPredicate(matching)` | ✅ | — |
 | `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 4 |
 | `cancelFetchRequest(id)` | 🟡 | Phase 4 |
-| `predicateForEvents(start, end, calendars)` | 🟡 | [[../vault/instructions/07 - Events Read]] |
+| `predicateForEvents(start, end, calendars)` | ✅ | — |
 | `predicateForReminders(inCalendars)` | 🟡 | Phase 4 |
 | `predicateForCompletedReminders(start, end, calendars)` | 🟡 | Phase 4 |
 | `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | Phase 4 |
@@ -62,34 +62,32 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 
 ## EKEvent
 
-Declared in `src/EKEvent.ts`. Property typedefs only; no native bridge, no constructor.
+Declared in `src/EKEvent.ts`. Populated by `_eventToNapi` in the native layer.
 
-| Property | Type | Populated by native? |
-|---|---|---|
-| `calendar` | `EKCalendar` | ❌ |
-| `title` | `string` | ❌ |
-| `location` | `string?` | ❌ |
-| `notes` | `string?` | ❌ |
-| `url` | `string?` | ❌ |
-| `lastModifiedDate` | `Date?` | ❌ |
-| `creationDate` | `Date?` | ❌ |
-| `timeZone` | `string?` | ❌ |
-| `hasAlarms` | `boolean` | ❌ |
-| `hasRecurrenceRules` | `boolean` | ❌ |
-| `hasAttendees` | `boolean` | ❌ |
-| `eventIdentifier` | `string` | ❌ |
-| `availability` | `number` | ❌ |
-| `startDate` | `Date` | ❌ |
-| `endDate` | `Date` | ❌ |
-| `isAllDay` | `boolean` | ❌ |
-| `occurenceDate` | `Date` | ❌ |
-| `isDetached` | `boolean` | ❌ |
-| `organizer` | `string?` | ❌ |
-| `status` | `number` | ❌ |
-| `birthdayContactIdentifier` | `string?` | ❌ |
-| `structuredLocation` | `string?` | ❌ |
-
-Full wire-up scheduled in Phase 3 (events read).
+| Property | Type | Populated | Notes |
+|---|---|---|---|
+| `calendar` | `EKCalendar` | ✅ | via nested `_calendarToNapi` |
+| `title` | `string` | ✅ | |
+| `location` | `string \| null` | ✅ | |
+| `notes` | `string \| null` | ✅ | |
+| `url` | `string \| null` | ✅ | `[[event URL] absoluteString]` |
+| `lastModifiedDate` | `Date \| null` | ✅ | |
+| `creationDate` | `Date \| null` | ✅ | |
+| `timeZone` | `string \| null` | ✅ | `[[event timeZone] name]` |
+| `hasAlarms` | `boolean` | ✅ | |
+| `hasRecurrenceRules` | `boolean` | ✅ | |
+| `hasAttendees` | `boolean` | ✅ | |
+| `eventIdentifier` | `string` | ✅ | |
+| `availability` | `number` | ✅ | raw Apple enum code; string consts deferred to Phase 6 |
+| `startDate` | `Date` | ✅ | |
+| `endDate` | `Date` | ✅ | |
+| `isAllDay` | `boolean` | ✅ | |
+| `occurrenceDate` | `Date` | ✅ | typo `occurenceDate` fixed 2026-04-23 |
+| `isDetached` | `boolean` | ✅ | |
+| `organizer` | `string \| null` | ✅ | shallow proxy: `participant.name`; full `EKParticipant` deferred to Phase 6 |
+| `status` | `number` | ✅ | raw Apple enum code; string consts deferred to Phase 6 |
+| `birthdayContactIdentifier` | `string \| null` | ✅ | |
+| `structuredLocation` | `string \| null` | ✅ | shallow proxy: `location.title`; full `EKStructuredLocation` deferred to Phase 6 |
 
 ---
 
@@ -157,4 +155,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **18** as of 2026-04-23 (down from 23 after Phase 2 calendar read-path wire-up).
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **15** as of 2026-04-23 (down from 18 after the events-read wire-up in [[../vault/instructions/07 - Events Read]]).

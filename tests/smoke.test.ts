@@ -96,5 +96,45 @@ if (!isMac) {
             const looked = store.source(first.sourceIdentifier);
             expect(looked.sourceIdentifier).toBe(first.sourceIdentifier);
         });
+
+        it("predicateForEvents returns an opaque handle", () => {
+            const start = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+            const end = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+            const p = store.predicateForEvents(start, end, store.calendars(EKEntityType.EVENT));
+            expect(typeof p).toBe("object");
+        });
+
+        it("eventsMatchingPredicate returns an array of well-shaped events", () => {
+            const start = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+            const end = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+            const cals = store.calendars(EKEntityType.EVENT);
+            const p = store.predicateForEvents(start, end, cals);
+            const events = store.eventsMatchingPredicate(p);
+            expect(Array.isArray(events)).toBe(true);
+            for (const e of events) {
+                expect(typeof e.eventIdentifier).toBe("string");
+                expect(typeof e.title).toBe("string");
+                expect(e.startDate).toBeInstanceOf(Date);
+                expect(e.endDate).toBeInstanceOf(Date);
+                expect(typeof e.isAllDay).toBe("boolean");
+                expect(typeof e.calendar.calendarIdentifier).toBe("string");
+            }
+        });
+
+        it("event(unknown-id) returns null", () => {
+            expect(store.event("this-is-not-a-real-event-id")).toBeNull();
+        });
+
+        it("event(first-matched-id) round-trips", () => {
+            const start = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+            const end = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+            const cals = store.calendars(EKEntityType.EVENT);
+            const events = store.eventsMatchingPredicate(store.predicateForEvents(start, end, cals));
+            if (events.length === 0) return;
+            const first = events[0];
+            const looked = store.event(first.eventIdentifier);
+            expect(looked).not.toBeNull();
+            expect(looked.eventIdentifier).toBe(first.eventIdentifier);
+        });
     });
 }

@@ -66,6 +66,101 @@ static napi_value _calendarToNapi(napi_env env, EKCalendar* cal) {
     return obj;
 }
 
+// Shallow-null helpers used by _eventToNapi.
+static void _setOrNull(napi_env env, napi_value obj, const char* key, NSString* s) {
+    napi_value v;
+    if (s == nil) {
+        napi_get_null(env, &v);
+    } else {
+        napi_create_string_utf8(env, [s UTF8String], NAPI_AUTO_LENGTH, &v);
+    }
+    napi_set_named_property(env, obj, key, v);
+}
+
+static void _setDateOrNull(napi_env env, napi_value obj, const char* key, NSDate* d) {
+    napi_value v;
+    if (d == nil) {
+        napi_get_null(env, &v);
+    } else {
+        napi_create_date(env, [d timeIntervalSince1970] * 1000.0, &v);
+    }
+    napi_set_named_property(env, obj, key, v);
+}
+
+static napi_value _eventToNapi(napi_env env, EKEvent* ev) {
+    napi_value obj;
+    napi_create_object(env, &obj);
+
+    napi_set_named_property(env, obj, "calendar", _calendarToNapi(env, [ev calendar]));
+
+    _setOrNull(env, obj, "title", [ev title]);
+    _setOrNull(env, obj, "location", [ev location]);
+    _setOrNull(env, obj, "notes", [ev notes]);
+    _setOrNull(env, obj, "url", [[ev URL] absoluteString]);
+    _setOrNull(env, obj, "timeZone", [[ev timeZone] name]);
+    _setOrNull(env, obj, "organizer", [[ev organizer] name]);
+    _setOrNull(env, obj, "structuredLocation", [[ev structuredLocation] title]);
+    _setOrNull(env, obj, "birthdayContactIdentifier", [ev birthdayContactIdentifier]);
+    _setOrNull(env, obj, "eventIdentifier", [ev eventIdentifier]);
+
+    _setDateOrNull(env, obj, "lastModifiedDate", [ev lastModifiedDate]);
+    _setDateOrNull(env, obj, "creationDate", [ev creationDate]);
+
+    // Non-nullable dates on a fetched event per Apple docs.
+    napi_value startDate, endDate, occurrenceDate;
+    napi_create_date(env, [[ev startDate] timeIntervalSince1970] * 1000.0, &startDate);
+    napi_set_named_property(env, obj, "startDate", startDate);
+    napi_create_date(env, [[ev endDate] timeIntervalSince1970] * 1000.0, &endDate);
+    napi_set_named_property(env, obj, "endDate", endDate);
+    napi_create_date(env, [[ev occurrenceDate] timeIntervalSince1970] * 1000.0, &occurrenceDate);
+    napi_set_named_property(env, obj, "occurrenceDate", occurrenceDate);
+
+    napi_value hasAlarms, hasRecurrenceRules, hasAttendees, isAllDay, isDetached;
+    napi_get_boolean(env, [ev hasAlarms], &hasAlarms);
+    napi_set_named_property(env, obj, "hasAlarms", hasAlarms);
+    napi_get_boolean(env, [ev hasRecurrenceRules], &hasRecurrenceRules);
+    napi_set_named_property(env, obj, "hasRecurrenceRules", hasRecurrenceRules);
+    napi_get_boolean(env, [ev hasAttendees], &hasAttendees);
+    napi_set_named_property(env, obj, "hasAttendees", hasAttendees);
+    napi_get_boolean(env, [ev isAllDay], &isAllDay);
+    napi_set_named_property(env, obj, "isAllDay", isAllDay);
+    napi_get_boolean(env, [ev isDetached], &isDetached);
+    napi_set_named_property(env, obj, "isDetached", isDetached);
+
+    napi_value availability, status;
+    napi_create_int32(env, (int32_t)[ev availability], &availability);
+    napi_set_named_property(env, obj, "availability", availability);
+    napi_create_int32(env, (int32_t)[ev status], &status);
+    napi_set_named_property(env, obj, "status", status);
+
+    return obj;
+}
+
+// NSPredicate opaque handles — see vault/planning/Native Bridging Model,
+// "NSPredicate handles" section. Manual retain/release because addon.mm
+// is not under ARC.
+static void _predicateFinalizer(napi_env /*env*/, void* data, void* /*hint*/) {
+    NSPredicate* p = (NSPredicate*)data;
+    [p release];
+}
+
+static napi_value _predicateToExternal(napi_env env, NSPredicate* p) {
+    [p retain];
+    napi_value result;
+    napi_create_external(env, (void*)p, _predicateFinalizer, nullptr, &result);
+    return result;
+}
+
+static NSPredicate* _predicateFromExternal(napi_env env, napi_value v) {
+    void* data;
+    napi_status status = napi_get_value_external(env, v, &data);
+    if (status != napi_ok || data == nullptr) {
+        napi_throw_type_error(env, nullptr, "Expected NSPredicate handle");
+        return nil;
+    }
+    return (NSPredicate*)data;
+}
+
 std::string _getStringFromNapiValue(napi_env env, napi_value value) {
     size_t str_size;
     napi_get_value_string_utf8(env, value, nullptr, 0, &str_size);
@@ -405,6 +500,87 @@ napi_value source(napi_env env, napi_callback_info info) {
     return obj;
 }
 
+// -----------------------------------------------------------------------------
+// ---------------------------------- Events -----------------------------------
+// -----------------------------------------------------------------------------
+
+napi_value predicateForEvents(napi_env env, napi_callback_info info) {
+    size_t argc = 3;
+    napi_value args[3];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    double startMs, endMs;
+    status = napi_get_date_value(env, args[0], &startMs);
+    if (status != napi_ok) {
+        napi_throw_type_error(env, nullptr, "startDate must be a Date");
+        return nullptr;
+    }
+    status = napi_get_date_value(env, args[1], &endMs);
+    if (status != napi_ok) {
+        napi_throw_type_error(env, nullptr, "endDate must be a Date");
+        return nullptr;
+    }
+    NSDate* startDate = [NSDate dateWithTimeIntervalSince1970:startMs / 1000.0];
+    NSDate* endDate = [NSDate dateWithTimeIntervalSince1970:endMs / 1000.0];
+
+    NSArray<EKCalendar*>* cals = nil;
+    napi_valuetype t;
+    napi_typeof(env, args[2], &t);
+    if (t != napi_null && t != napi_undefined) {
+        uint32_t length;
+        napi_get_array_length(env, args[2], &length);
+        NSMutableArray<EKCalendar*>* m = [NSMutableArray arrayWithCapacity:length];
+        for (uint32_t i = 0; i < length; i++) {
+            napi_value elem, idProp;
+            napi_get_element(env, args[2], i, &elem);
+            napi_get_named_property(env, elem, "calendarIdentifier", &idProp);
+            std::string id = _getStringFromNapiValue(env, idProp);
+            EKCalendar* cal = [store calendarWithIdentifier:@(id.c_str())];
+            if (cal) [m addObject:cal];
+        }
+        cals = m;
+    }
+
+    NSPredicate* p = [store predicateForEventsWithStartDate:startDate endDate:endDate calendars:cals];
+    return _predicateToExternal(env, p);
+}
+
+napi_value eventsMatchingPredicate(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    NSPredicate* p = _predicateFromExternal(env, args[0]);
+    if (p == nil) return nullptr;
+
+    NSArray<EKEvent*>* events = [store eventsMatchingPredicate:p];
+
+    napi_value result;
+    napi_create_array_with_length(env, [events count], &result);
+    for (NSUInteger i = 0; i < [events count]; i++) {
+        napi_set_element(env, result, i, _eventToNapi(env, events[i]));
+    }
+    return result;
+}
+
+napi_value event(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    std::string id = _getStringFromNapiValue(env, args[0]);
+    EKEvent* ev = [store eventWithIdentifier:@(id.c_str())];
+    if (ev == nil) {
+        napi_value n;
+        napi_get_null(env, &n);
+        return n;
+    }
+    return _eventToNapi(env, ev);
+}
+
 // XXX Deprecated
 napi_value initWithSources(napi_env env, napi_callback_info info) {
     // size_t argc = 1;
@@ -549,6 +725,27 @@ napi_value Init(napi_env env, napi_value exports) {
     status = napi_create_function(env, nullptr, 0, source, nullptr, &fnSource);
     assert(status == napi_ok);
     status = napi_set_named_property(env, exports, "source", fnSource);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnPredicateForEvents;
+    status = napi_create_function(env, nullptr, 0, predicateForEvents, nullptr, &fnPredicateForEvents);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "predicateForEvents", fnPredicateForEvents);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnEventsMatchingPredicate;
+    status = napi_create_function(env, nullptr, 0, eventsMatchingPredicate, nullptr, &fnEventsMatchingPredicate);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "eventsMatchingPredicate", fnEventsMatchingPredicate);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnEvent;
+    status = napi_create_function(env, nullptr, 0, event, nullptr, &fnEvent);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "event", fnEvent);
     assert(status == napi_ok);
 
     return exports;

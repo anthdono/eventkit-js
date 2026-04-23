@@ -93,7 +93,7 @@ export class EKEventStore {
     }
 
     public event(withIdentifier: String): EKEvent | null {
-        throw new NotImplemented;
+        return addon.event(withIdentifier);
     }
 
     public calendarItem(withIdentifier: string): EKCalendarItem | null {
@@ -146,7 +146,7 @@ export class EKEventStore {
     }
 
     public eventsMatchingPredicate(matching: NSPredicate): EKEvent[] {
-        throw new NotImplemented;
+        return addon.eventsMatchingPredicate(matching);
     }
 
     public fetchReminders(matching: NSPredicate): Promise<EKReminder[]> {
@@ -158,11 +158,11 @@ export class EKEventStore {
     }
 
     public predicateForEvents(
-            startDate: Date, 
-            endDate: Date, 
+            startDate: Date,
+            endDate: Date,
             calendars: EKCalendar[]
     ): NSPredicate {
-        throw new NotImplemented;
+        return addon.predicateForEvents(startDate, endDate, calendars);
     }
 
     public predicateForReminders(inCalendars: EKCalendar[] | null): NSPredicate {
