@@ -38,7 +38,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `event(withIdentifier)` | ✅ | — |
 | `calendarItem(withIdentifier)` | 🟡 | Phase 3 (08) |
 | `calendarItems(withExternalIdentifier)` | 🟡 | Phase 3 (08) |
-| `enumerateEvents(matching, block): Promise<void>` | 🟡 | Phase 3 — 08 (not yet drafted) |
+| `enumerateEvents(matching, block): Promise<void>` | 🟡 | [[../vault/instructions/08 - Events Streaming]] |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
 | `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 4 |
 | `cancelFetchRequest(id)` | 🟡 | Phase 4 |
