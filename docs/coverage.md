@@ -22,9 +22,9 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 
 | Member | Status | Owning instruction |
 |---|---|---|
-| `requestWriteOnlyAccessToEvents(completion)` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
-| `requestFullAccessToEvents(completion)` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
-| `requestFullAccessToReminders(completion)` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
+| `requestWriteOnlyAccessToEvents(): Promise<boolean>` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
+| `requestFullAccessToEvents(): Promise<boolean>` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
+| `requestFullAccessToReminders(): Promise<boolean>` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
 | `authorizationStatus(forEntityType)` | 🟡 | [[../vault/instructions/05 - Authorization Foundation]] |
 | `source(withIdentifier)` | 🟡 | Phase 2 |
 | `commit()` | 🟡 | Phase 3 |
@@ -38,9 +38,9 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `event(withIdentifier)` | 🟡 | Phase 3 |
 | `calendarItem(withIdentifier)` | 🟡 | Phase 3 |
 | `calendarItems(withExternalIdentifier)` | 🟡 | Phase 3 |
-| `enumerateEvents(matching, usingBlock)` | 🟡 | Phase 3 |
+| `enumerateEvents(matching, block): Promise<void>` | 🟡 | Phase 3 |
 | `eventsMatchingPredicate(matching)` | 🟡 | Phase 3 |
-| `fetchReminders(matching, completion)` | 🟡 | Phase 4 |
+| `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 4 |
 | `cancelFetchRequest(id)` | 🟡 | Phase 4 |
 | `predicateForEvents(start, end, calendars)` | 🟡 | Phase 3 |
 | `predicateForReminders(inCalendars)` | 🟡 | Phase 4 |

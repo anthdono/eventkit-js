@@ -7,6 +7,7 @@ import { EKEntityType } from "./EKEntityType";
 import { EKAuthorizationStatus } from "./EKAuthorizationStatus";
 import { EKEvent } from "./EKEvent";
 import { EKCalendarItem } from "./EKCalendarItem";
+import { EKReminder } from "./EKReminder";
 import { NSPredicate } from "./NSPredicate";
 
 const addon = require("../build/Release/addon");
@@ -29,15 +30,15 @@ export class EKEventStore {
         return result;
     }
 
-    public requestWriteOnlyAccessToEvents(completion: Function): boolean {
+    public requestWriteOnlyAccessToEvents(): Promise<boolean> {
         throw new NotImplemented;
     }
 
-    public requestFullAccessToEvents(completion: Function): boolean {
+    public requestFullAccessToEvents(): Promise<boolean> {
         throw new NotImplemented;
     }
 
-    public requestFullAccessToReminders(completion: Function): boolean {
+    public requestFullAccessToReminders(): Promise<boolean> {
         throw new NotImplemented;
     }
 
@@ -136,8 +137,10 @@ export class EKEventStore {
     //     throw new NotImplemented;
     // }
 
-    // XXX: returns some enumerable?
-    public enumerateEvents(matching: NSPredicate, usingBlock: Function): void {
+    public enumerateEvents(
+        matching: NSPredicate,
+        block: (event: EKEvent, stop: () => void) => void
+    ): Promise<void> {
         throw new NotImplemented;
     }
 
@@ -145,7 +148,7 @@ export class EKEventStore {
         throw new NotImplemented;
     }
 
-    public fetchReminders(matching: NSPredicate, completion: Function): void {
+    public fetchReminders(matching: NSPredicate): Promise<EKReminder[]> {
         throw new NotImplemented;
     }
 
