@@ -1,6 +1,6 @@
 # EventKit Coverage
 
-Last updated: 2026-04-23. Per-member implementation status for the TypeScript surface. Source-of-truth status board lives in [[../vault/Tracking]]; this file is the drill-down.
+Last updated: 2026-04-24. Per-member implementation status for the TypeScript surface. Source-of-truth status board lives in [[../vault/Tracking]]; this file is the drill-down.
 
 Legend: ✅ implemented • 🟡 stub (`throw new NotImplemented`) • ❌ not yet declared in TS • 🟥 broken (has known runtime bug, not yet fixed)
 
@@ -33,19 +33,19 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `defaultCalendarForNewReminders()` | ✅ | — |
 | `calendars(forEntityType)` | ✅ | — |
 | `calendar(withIdentifier)` | ✅ | — |
-| `saveCalendar(c, commit)` | 🟡 | Phase 5 |
-| `removeCalendar(c, commit)` | 🟡 | Phase 5 |
+| `saveCalendar(c, commit)` | 🟡 | Phase 6 (calendar CRUD) |
+| `removeCalendar(c, commit)` | 🟡 | Phase 6 (calendar CRUD) |
 | `event(withIdentifier)` | ✅ | — |
-| `calendarItem(withIdentifier)` | 🟡 | Phase 3 (08) |
-| `calendarItems(withExternalIdentifier)` | 🟡 | Phase 3 (08) |
+| `calendarItem(withIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
+| `calendarItems(withExternalIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
 | `enumerateEvents(matching, block): Promise<void>` | ✅ | — |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
-| `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 4 |
-| `cancelFetchRequest(id)` | 🟡 | Phase 4 |
+| `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 5 (reminders) |
+| `cancelFetchRequest(id)` | 🟡 | Phase 5 (reminders) |
 | `predicateForEvents(start, end, calendars)` | ✅ | — |
-| `predicateForReminders(inCalendars)` | 🟡 | Phase 4 |
-| `predicateForCompletedReminders(start, end, calendars)` | 🟡 | Phase 4 |
-| `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | Phase 4 |
+| `predicateForReminders(inCalendars)` | 🟡 | Phase 5 (reminders) |
+| `predicateForCompletedReminders(start, end, calendars)` | 🟡 | Phase 5 (reminders) |
+| `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | Phase 5 (reminders) |
 | `save(event, span[, commit])` | ✅ | — |
 | `save(reminder, commit)` | 🟡 | Phase 5 (reminders) — overload declared, body throws `NotImplemented` |
 | `remove(event, span[, commit])` | ✅ | — |
@@ -118,20 +118,20 @@ Declared in `src/EKCalendar.ts`. Populated by `_calendarToNapi` in the native la
 | `allowsContentModifications` | `boolean` | ✅ |
 
 Explicitly deferred (scheduled for later phases):
-- `CGColor` — expose as hex string `"#RRGGBB"` when Phase 5 (calendar CRUD) needs it.
+- `CGColor` — expose as hex string `"#RRGGBB"` when Phase 6 (calendar CRUD) needs it.
 - `allowedEntityTypes` bitmask — defer until a consumer asks.
 
 ## EKReminder, NSPredicate
 
-Empty shells as of 2026-04-23 (`src/EKReminder.ts`, `src/NSPredicate.ts`). Scheduled to grow in the phase where their first consumer lands:
-- `NSPredicate` → Phase 3 (needs an object-identity model — see [[../vault/planning/Native Bridging Model]]).
-- `EKReminder` → Phase 4.
+Empty shells as of 2026-04-24 (`src/EKReminder.ts`, `src/NSPredicate.ts`). `NSPredicate` is wired as an opaque native-handle class (populated by `predicateForEvents` in Phase 3) but carries no TS-side fields. Scheduled to grow in the phase where their first consumer lands:
+- `NSPredicate` → still minimal; revisit if a consumer needs introspection (no near-term phase owner).
+- `EKReminder` → Phase 5 (reminders).
 
 ---
 
 ## EKCalendarItem
 
-Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) and a large block of commented-out Obj-C header text as a design reference. The header reference is tracked as tech debt in [[../vault/Tracking]] and is scheduled for cleanup (or conversion) in Phase 3.
+Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) and a large block of commented-out Obj-C header text as a design reference. The header reference is tracked as tech debt in [[../vault/Tracking]] and is scheduled for cleanup (or conversion) in Phase 5 (reminders), when the first calendar-item field beyond `calendar` lands.
 
 ---
 
