@@ -5,6 +5,7 @@ import { NotImplemented } from "./NotImplemented";
 import { EKSource } from "./EKSource";
 import { EKEntityType, _toNative as entityTypeToNative } from "./EKEntityType";
 import { EKAuthorizationStatus, _fromNative as authStatusFromNative } from "./EKAuthorizationStatus";
+import { EKSpan, _toNative as spanToNative } from "./EKSpan";
 import { EKEvent } from "./EKEvent";
 import { EKCalendarItem } from "./EKCalendarItem";
 import { EKReminder } from "./EKReminder";
@@ -59,15 +60,15 @@ export class EKEventStore {
 
     // throws error
     public commit(): void {
-        throw new NotImplemented;
+        addon.commit();
     }
 
     public reset(): void {
-        throw new NotImplemented;
+        addon.reset();
     }
 
     public refreshSourcesIfNecessary(): void {
-        throw new NotImplemented;
+        addon.refreshSourcesIfNecessary();
     }
 
     public defaultCalendarForNewReminders(): EKCalendar {
@@ -104,39 +105,27 @@ export class EKEventStore {
         throw new NotImplemented;
     }
 
-    // XXX overloading
-    // 
-    // // throws error
-    // public remove(event: EKEvent, span: EKSpan): void {
-    //     throw new NotImplemented;
-    // }
-    // 
-    // // throws error
-    // public remove(event: EKEvent, span: EKSpan, commit: boolean): void {
-    //     throw new NotImplemented;
-    // }
-    // 
-    // // throws error
-    // public remove(reminder: EKReminder, commit: boolean): void {
-    //     throw new NotImplemented;
-    // }
+    public save(event: EKEvent, span: EKSpan, commit?: boolean): void;
+    public save(reminder: EKReminder, commit: boolean): void;
+    public save(item: EKEvent | EKReminder, spanOrCommit: EKSpan | boolean, commit?: boolean): void {
+        if (typeof spanOrCommit === "boolean") {
+            // save(reminder, commit) — landed in Phase 5.
+            throw new NotImplemented;
+        }
+        const doCommit = commit ?? true;
+        addon.saveEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
+    }
 
-    // XXX Overloaded
-    // 
-    // // throws error
-    // public save(event: EKEvent, span: EKSpan): void {
-    //     throw new NotImplemented;
-    // }
-    // 
-    // // throws error
-    // public save(event: EKEvent, span: EKSpan, commit: boolean): void {
-    //     throw new NotImplemented;
-    // }
-    // 
-    // // throws error
-    // public save(reminder: EKReminder, commit: boolean): void {
-    //     throw new NotImplemented;
-    // }
+    public remove(event: EKEvent, span: EKSpan, commit?: boolean): void;
+    public remove(reminder: EKReminder, commit: boolean): void;
+    public remove(item: EKEvent | EKReminder, spanOrCommit: EKSpan | boolean, commit?: boolean): void {
+        if (typeof spanOrCommit === "boolean") {
+            // remove(reminder, commit) — landed in Phase 5.
+            throw new NotImplemented;
+        }
+        const doCommit = commit ?? true;
+        addon.removeEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
+    }
 
     public enumerateEvents(
         matching: NSPredicate,

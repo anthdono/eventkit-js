@@ -719,6 +719,236 @@ napi_value enumerateEvents(napi_env env, napi_callback_info info) {
 }
 
 // -----------------------------------------------------------------------------
+// ------------------------------- Events write --------------------------------
+// -----------------------------------------------------------------------------
+
+// Apply writable fields from a JS plain-object onto an EKEvent*. Convention:
+//   undefined → leave unchanged, null → clear, present → set.
+static void _applyJsToEKEvent(napi_env env, EKEvent* target, napi_value source) {
+    napi_value prop;
+    napi_valuetype t;
+
+    #define APPLY_STRING(key, expr) do { \
+        if (napi_get_named_property(env, source, key, &prop) != napi_ok) break; \
+        napi_typeof(env, prop, &t); \
+        if (t == napi_string) { \
+            std::string s = _getStringFromNapiValue(env, prop); \
+            (expr) = @(s.c_str()); \
+        } else if (t == napi_null) { \
+            (expr) = nil; \
+        } \
+    } while (0)
+
+    APPLY_STRING("title", target.title);
+    APPLY_STRING("location", target.location);
+    APPLY_STRING("notes", target.notes);
+
+    // URL: NSString → NSURL
+    if (napi_get_named_property(env, source, "url", &prop) == napi_ok) {
+        napi_typeof(env, prop, &t);
+        if (t == napi_string) {
+            std::string s = _getStringFromNapiValue(env, prop);
+            target.URL = [NSURL URLWithString:@(s.c_str())];
+        } else if (t == napi_null) {
+            target.URL = nil;
+        }
+    }
+
+    // timeZone: NSString (name) → NSTimeZone
+    if (napi_get_named_property(env, source, "timeZone", &prop) == napi_ok) {
+        napi_typeof(env, prop, &t);
+        if (t == napi_string) {
+            std::string s = _getStringFromNapiValue(env, prop);
+            target.timeZone = [NSTimeZone timeZoneWithName:@(s.c_str())];
+        } else if (t == napi_null) {
+            target.timeZone = nil;
+        }
+    }
+
+    #undef APPLY_STRING
+
+    // Dates. Null-to-clear isn't meaningful for startDate/endDate — EventKit
+    // treats them as non-nullable; null is interpreted as "leave unchanged".
+    if (napi_get_named_property(env, source, "startDate", &prop) == napi_ok) {
+        napi_typeof(env, prop, &t);
+        if (t == napi_object) {
+            double ms;
+            if (napi_get_date_value(env, prop, &ms) == napi_ok) {
+                target.startDate = [NSDate dateWithTimeIntervalSince1970:ms / 1000.0];
+            }
+        }
+    }
+    if (napi_get_named_property(env, source, "endDate", &prop) == napi_ok) {
+        napi_typeof(env, prop, &t);
+        if (t == napi_object) {
+            double ms;
+            if (napi_get_date_value(env, prop, &ms) == napi_ok) {
+                target.endDate = [NSDate dateWithTimeIntervalSince1970:ms / 1000.0];
+            }
+        }
+    }
+
+    if (napi_get_named_property(env, source, "isAllDay", &prop) == napi_ok) {
+        napi_typeof(env, prop, &t);
+        if (t == napi_boolean) {
+            bool v;
+            napi_get_value_bool(env, prop, &v);
+            target.allDay = v;
+        }
+    }
+
+    // calendar: { calendarIdentifier } → resolve via [store calendarWithIdentifier:]
+    if (napi_get_named_property(env, source, "calendar", &prop) == napi_ok) {
+        napi_typeof(env, prop, &t);
+        if (t == napi_object) {
+            napi_value idProp;
+            napi_get_named_property(env, prop, "calendarIdentifier", &idProp);
+            std::string id = _getStringFromNapiValue(env, idProp);
+            EKCalendar* cal = [store calendarWithIdentifier:@(id.c_str())];
+            if (cal) target.calendar = cal;
+        }
+    }
+
+    if (napi_get_named_property(env, source, "availability", &prop) == napi_ok) {
+        napi_typeof(env, prop, &t);
+        if (t == napi_number) {
+            int32_t v;
+            napi_get_value_int32(env, prop, &v);
+            target.availability = (EKEventAvailability)v;
+        }
+    }
+}
+
+napi_value saveEvent(napi_env env, napi_callback_info info) {
+    size_t argc = 3;
+    napi_value args[3];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    int32_t spanRaw;
+    status = napi_get_value_int32(env, args[1], &spanRaw);
+    if (status != napi_ok) {
+        napi_throw_type_error(env, nullptr, "Expected span as integer");
+        return nullptr;
+    }
+    EKSpan span = (EKSpan)spanRaw;
+
+    bool commit;
+    status = napi_get_value_bool(env, args[2], &commit);
+    if (status != napi_ok) {
+        napi_throw_type_error(env, nullptr, "Expected commit as boolean");
+        return nullptr;
+    }
+
+    EKEvent* ekEvent = nil;
+    napi_value idProp;
+    napi_valuetype idType;
+    napi_get_named_property(env, args[0], "eventIdentifier", &idProp);
+    napi_typeof(env, idProp, &idType);
+    if (idType == napi_string) {
+        std::string id = _getStringFromNapiValue(env, idProp);
+        ekEvent = [store eventWithIdentifier:@(id.c_str())];
+    }
+    if (ekEvent == nil) {
+        ekEvent = [EKEvent eventWithEventStore:store];
+    }
+
+    _applyJsToEKEvent(env, ekEvent, args[0]);
+
+    NSError* error = nil;
+    BOOL ok = [store saveEvent:ekEvent span:span commit:commit error:&error];
+    if (!ok) {
+        const char* msg = error ? [[error localizedDescription] UTF8String] : "saveEvent failed";
+        napi_value err, msgVal;
+        napi_create_string_utf8(env, msg, NAPI_AUTO_LENGTH, &msgVal);
+        napi_create_error(env, nullptr, msgVal, &err);
+        napi_throw(env, err);
+        return nullptr;
+    }
+
+    napi_value result;
+    napi_create_string_utf8(env, [[ekEvent eventIdentifier] UTF8String], NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
+napi_value removeEvent(napi_env env, napi_callback_info info) {
+    size_t argc = 3;
+    napi_value args[3];
+    napi_status status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
+
+    int32_t spanRaw;
+    napi_get_value_int32(env, args[1], &spanRaw);
+    EKSpan span = (EKSpan)spanRaw;
+
+    bool commit;
+    napi_get_value_bool(env, args[2], &commit);
+
+    napi_value idProp;
+    napi_valuetype idType;
+    napi_get_named_property(env, args[0], "eventIdentifier", &idProp);
+    napi_typeof(env, idProp, &idType);
+    if (idType != napi_string) {
+        napi_throw_type_error(env, nullptr, "remove requires event with eventIdentifier");
+        return nullptr;
+    }
+    std::string id = _getStringFromNapiValue(env, idProp);
+    EKEvent* ekEvent = [store eventWithIdentifier:@(id.c_str())];
+    if (ekEvent == nil) {
+        napi_value err, msg;
+        napi_create_string_utf8(env, "event not found", NAPI_AUTO_LENGTH, &msg);
+        napi_create_error(env, nullptr, msg, &err);
+        napi_throw(env, err);
+        return nullptr;
+    }
+
+    NSError* error = nil;
+    BOOL ok = [store removeEvent:ekEvent span:span commit:commit error:&error];
+    if (!ok) {
+        const char* msg = error ? [[error localizedDescription] UTF8String] : "removeEvent failed";
+        napi_value err, msgVal;
+        napi_create_string_utf8(env, msg, NAPI_AUTO_LENGTH, &msgVal);
+        napi_create_error(env, nullptr, msgVal, &err);
+        napi_throw(env, err);
+        return nullptr;
+    }
+
+    napi_value undef;
+    napi_get_undefined(env, &undef);
+    return undef;
+}
+
+napi_value commit(napi_env env, napi_callback_info info) {
+    NSError* error = nil;
+    BOOL ok = [store commit:&error];
+    if (!ok) {
+        const char* msg = error ? [[error localizedDescription] UTF8String] : "commit failed";
+        napi_value err, msgVal;
+        napi_create_string_utf8(env, msg, NAPI_AUTO_LENGTH, &msgVal);
+        napi_create_error(env, nullptr, msgVal, &err);
+        napi_throw(env, err);
+        return nullptr;
+    }
+    napi_value undef;
+    napi_get_undefined(env, &undef);
+    return undef;
+}
+
+napi_value reset(napi_env env, napi_callback_info info) {
+    [store reset];
+    napi_value undef;
+    napi_get_undefined(env, &undef);
+    return undef;
+}
+
+napi_value refreshSourcesIfNecessary(napi_env env, napi_callback_info info) {
+    [store refreshSourcesIfNecessary];
+    napi_value undef;
+    napi_get_undefined(env, &undef);
+    return undef;
+}
+
+// -----------------------------------------------------------------------------
 // --------------------------------- Node-API ----------------------------------
 // -----------------------------------------------------------------------------
 
@@ -836,6 +1066,41 @@ napi_value Init(napi_env env, napi_value exports) {
     status = napi_create_function(env, nullptr, 0, enumerateEvents, nullptr, &fnEnumerateEvents);
     assert(status == napi_ok);
     status = napi_set_named_property(env, exports, "enumerateEvents", fnEnumerateEvents);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnSaveEvent;
+    status = napi_create_function(env, nullptr, 0, saveEvent, nullptr, &fnSaveEvent);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "saveEvent", fnSaveEvent);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnRemoveEvent;
+    status = napi_create_function(env, nullptr, 0, removeEvent, nullptr, &fnRemoveEvent);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "removeEvent", fnRemoveEvent);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnCommit;
+    status = napi_create_function(env, nullptr, 0, commit, nullptr, &fnCommit);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "commit", fnCommit);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnReset;
+    status = napi_create_function(env, nullptr, 0, reset, nullptr, &fnReset);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "reset", fnReset);
+    assert(status == napi_ok);
+
+    //
+    napi_value fnRefreshSourcesIfNecessary;
+    status = napi_create_function(env, nullptr, 0, refreshSourcesIfNecessary, nullptr, &fnRefreshSourcesIfNecessary);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, exports, "refreshSourcesIfNecessary", fnRefreshSourcesIfNecessary);
     assert(status == napi_ok);
 
     return exports;

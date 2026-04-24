@@ -182,5 +182,47 @@ if (!isMac) {
                 store.enumerateEvents(p, () => { throw sentinel; })
             ).rejects.toBe(sentinel);
         });
+
+        it("commit() with no pending changes does not throw", () => {
+            expect(() => store.commit()).not.toThrow();
+        });
+
+        it("reset() does not throw", () => {
+            expect(() => store.reset()).not.toThrow();
+        });
+
+        it("refreshSourcesIfNecessary() does not throw", () => {
+            expect(() => store.refreshSourcesIfNecessary()).not.toThrow();
+        });
+
+        // Manual-only. Flip to `it` and set TEST_CALENDAR_ID to a throwaway
+        // calendar before running. This WILL create and delete a real event
+        // in that calendar.
+        it.skip("save/remove lifecycle against a test calendar (manual)", () => {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { EKSpan } = require("../src/EKSpan");
+            const testCalId = process.env.TEST_CALENDAR_ID;
+            if (!testCalId) throw new Error("Set TEST_CALENDAR_ID to a throwaway calendar id");
+            const cal = store.calendar(testCalId);
+            expect(cal).not.toBeNull();
+
+            // Go through addon.saveEvent directly to recover the new id —
+            // the public save() wrapper returns void.
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const addon = require("../build/Release/addon");
+            const createdId: string = addon.saveEvent({
+                title: "eventkit-js smoke test (delete me)",
+                startDate: new Date(Date.now() + 60_000),
+                endDate: new Date(Date.now() + 120_000),
+                calendar: cal,
+            }, 0, true);
+            expect(typeof createdId).toBe("string");
+
+            const fetched: any = store.event(createdId);
+            expect(fetched.title).toBe("eventkit-js smoke test (delete me)");
+
+            store.remove(fetched, EKSpan.THIS_EVENT);
+            expect(store.event(createdId)).toBeNull();
+        });
     });
 }

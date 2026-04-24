@@ -27,9 +27,9 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `requestFullAccessToReminders(): Promise<boolean>` | ✅ | — |
 | `authorizationStatus(forEntityType)` | ✅ | — |
 | `source(withIdentifier)` | ✅ | — |
-| `commit()` | 🟡 | [[../vault/instructions/09 - Events Write]] |
-| `reset()` | 🟡 | [[../vault/instructions/09 - Events Write]] |
-| `refreshSourcesIfNecessary()` | 🟡 | [[../vault/instructions/09 - Events Write]] |
+| `commit()` | ✅ | — |
+| `reset()` | ✅ | — |
+| `refreshSourcesIfNecessary()` | ✅ | — |
 | `defaultCalendarForNewReminders()` | ✅ | — |
 | `calendars(forEntityType)` | ✅ | — |
 | `calendar(withIdentifier)` | ✅ | — |
@@ -46,10 +46,10 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `predicateForReminders(inCalendars)` | 🟡 | Phase 4 |
 | `predicateForCompletedReminders(start, end, calendars)` | 🟡 | Phase 4 |
 | `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | Phase 4 |
-| `save(event, span[, commit])` | ❌ | [[../vault/instructions/09 - Events Write]] |
-| `save(reminder, commit)` | ❌ | Phase 5 (reminders) |
-| `remove(event, span[, commit])` | ❌ | [[../vault/instructions/09 - Events Write]] |
-| `remove(reminder, commit)` | ❌ | Phase 5 (reminders) |
+| `save(event, span[, commit])` | ✅ | — |
+| `save(reminder, commit)` | 🟡 | Phase 5 (reminders) — overload declared, body throws `NotImplemented` |
+| `remove(event, span[, commit])` | ✅ | — |
+| `remove(reminder, commit)` | 🟡 | Phase 5 (reminders) — overload declared, body throws `NotImplemented` |
 
 ### Getters
 
@@ -157,4 +157,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **14** as of 2026-04-23 (down from 15 after the events-streaming wire-up in [[../vault/instructions/08 - Events Streaming]]).
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **13** as of 2026-04-24 (down from 14 after the events-write wire-up in [[../vault/instructions/09 - Events Write]]; note the two `save`/`remove` reminder-path branches each still contain a `throw new NotImplemented` until Phase 5).
