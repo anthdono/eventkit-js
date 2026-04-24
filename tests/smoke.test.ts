@@ -198,7 +198,7 @@ if (!isMac) {
         // Manual-only. Flip to `it` and set TEST_CALENDAR_ID to a throwaway
         // calendar before running. This WILL create and delete a real event
         // in that calendar.
-        it.skip("save/remove lifecycle against a test calendar (manual)", () => {
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)("save/remove lifecycle against a test calendar (manual)", () => {
             // eslint-disable-next-line @typescript-eslint/no-var-requires
             const { EKSpan } = require("../src/EKSpan");
             const testCalId = process.env.TEST_CALENDAR_ID;

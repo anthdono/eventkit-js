@@ -25,12 +25,15 @@
         "transform": {
             "^.+\\.(ts|tsx)$": "ts-jest"
         },
-        "testRegex": "(/tests/.*|\\.(test|spec))\\.(ts|tsx|js)$",
+        "testRegex": "(/tests/.*\\.test|\\.(test|spec))\\.(ts|tsx|js)$",
         "moduleFileExtensions": [
             "ts",
             "tsx",
             "js",
             "node"
+        ],
+        "setupFiles": [
+            "<rootDir>/tests/jest.setup.ts"
         ]
     },
     "gypfile": true,
