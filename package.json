@@ -1,15 +1,42 @@
 {
     "name": "eventkit-js",
     "version": "1.0.0",
+    "description": "Node-API wrapper for Apple's EventKit framework — read and write Calendar events and Reminders from Node.js on macOS.",
     "author": "anthdono",
     "license": "ISC",
-    "description": "",
+    "main": "lib/EventKit.js",
+    "types": "lib/EventKit.d.ts",
+    "engines": {
+        "node": ">=20"
+    },
+    "os": [
+        "darwin"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/anthdono/eventkit-js.git"
+    },
+    "bugs": {
+        "url": "https://github.com/anthdono/eventkit-js/issues"
+    },
+    "homepage": "https://github.com/anthdono/eventkit-js#readme",
+    "keywords": [
+        "eventkit",
+        "calendar",
+        "reminders",
+        "macos",
+        "native",
+        "n-api",
+        "node-addon-api",
+        "objective-c"
+    ],
     "scripts": {
         "build:native": "node-gyp rebuild",
         "build:ts": "tsc -p .",
         "build": "npm run build:native && npm run build:ts",
         "install": "node-gyp rebuild || node-gyp rebuild --fallback-to-build=false",
-        "test": "npx jest"
+        "test": "npx jest",
+        "prepublishOnly": "npm run build && npm test"
     },
     "dependencies": {
         "node-addon-api": "^8.0.0",
@@ -41,7 +68,11 @@
     "files": [
         "lib/**/*",
         "build/Release/*.node",
-        "native/binding.gyp"
-  ]
-
+        "binding.gyp",
+        "src/native/**/*.mm",
+        "src/native/**/*.h",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md"
+    ]
 }

@@ -4,6 +4,8 @@
         "module": "commonjs",
         "rootDir": "./src",
         "outDir": "./lib",
+        "declaration": true,
+        "declarationMap": true,
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
         "strict": false,
@@ -17,5 +19,4 @@
         "exclude",
         "node_modules"
     ]
-
 }

@@ -1,32 +1,111 @@
-A TypeScript wrapper of Apple's [EventKit](https://developer.apple.com/documentation/eventkit) framework implemented natively via Objective C++ addons using Node-API.
+# eventkit-js
 
-> [!NOTE]
-> Project under development, see [coverage](./docs/coverage.md)
->
-> The legacy wrapper (using Swift dynamic libs + FFI) is still available at /legacy, however it isa
-> broken on recent Node.js releases due to outdated [node-ffi](https://github.com/node-ffi/node-ffi)/[node-ffi-napi](https://github.com/node-ffi-napi/node-ffi-napi).
+Node-API wrapper for Apple's [EventKit](https://developer.apple.com/documentation/eventkit) framework — read and write Calendar events and Reminders from Node.js on macOS.
 
-## About
+Phases 0–5 (calendars, events read/write/streaming, reminders) are complete. Phase 6 — alarms, recurrence rules, participants, structured location, calendar CRUD, change notifications — is on the roadmap; see [`vault/Tracking.md`](./vault/Tracking.md).
 
-### Why?
+## Installation
 
-The native Apple frameworks expose their API to Objective-C and Swift, and
-occasionally C (e.g. Core Graphics or certain parts of Core Audio). 
+```bash
+npm install eventkit-js
+```
 
-This project exposes Apple's EventKit framework to JavaScript/Typescript
-enabling interaction with Calendars and Reminders from Node.js.
+macOS-only. The `os` field in `package.json` blocks install on Linux and Windows. Build requires Xcode Command Line Tools and a C++17-capable clang (defaults on macOS 14+).
 
-### XXX TODO
+## Permissions and `Info.plist`
 
-- Library API trys to mimic swift docs 
-https://developer.apple.com/documentation/eventkit/ekevent
+On macOS 14+ the `request*Access*` methods only show the system consent dialog if the host app's bundle includes the relevant usage-description keys:
 
-## Running on macOS 14+
+- `NSCalendarsFullAccessUsageDescription`
+- `NSRemindersFullAccessUsageDescription`
 
-Consuming applications must include `NSCalendarsFullAccessUsageDescription`
-and `NSRemindersFullAccessUsageDescription` keys in the app bundle's
-`Info.plist`, and the binary must be signed. Without these, the
-`request*Access*` methods on `EKEventStore` resolve silently with
-`granted=false` and no system dialog is shown. This applies to any host
-app that ships a Node runtime — the `node` binary itself does not carry
-these keys, so running under bare `node` will never trigger the dialog.
+The `node` binary itself does not carry these. Bare `node` calls will resolve `requestFullAccessToEvents()` with `false` silently. To exercise the full path, run from a signed app bundle that owns those keys.
+
+## Quickstart — Events
+
+```ts
+import { EKEventStore, EKEntityType, EKSpan } from "eventkit-js";
+
+const store = EKEventStore.init();
+await store.requestFullAccessToEvents();
+
+// Create an event in the user's default calendar.
+const cal = store.defaultCalendarForNewEvents;
+store.save({
+    title: "Project review",
+    startDate: new Date("2026-05-01T15:00:00"),
+    endDate:   new Date("2026-05-01T16:00:00"),
+    calendar: cal,
+}, EKSpan.THIS_EVENT);
+
+// Read events in a date window.
+const start = new Date(Date.now() - 7 * 86400 * 1000);
+const end   = new Date(Date.now() + 7 * 86400 * 1000);
+const cals  = store.calendars(EKEntityType.EVENT);
+const events = store.eventsMatchingPredicate(
+    store.predicateForEvents(start, end, cals)
+);
+for (const e of events) console.log(e.title, e.startDate);
+```
+
+## Quickstart — Reminders
+
+```ts
+import { EKEventStore } from "eventkit-js";
+
+const store = EKEventStore.init();
+await store.requestFullAccessToReminders();
+
+const all = await store.fetchReminders(store.predicateForReminders(null));
+for (const r of all) console.log(r.title, r.completed);
+```
+
+## Cancelling a fetch with `AbortSignal`
+
+```ts
+const ctrl = new AbortController();
+setTimeout(() => ctrl.abort(), 1000);
+try {
+    const reminders = await store.fetchReminders(p, { signal: ctrl.signal });
+} catch (e: any) {
+    if (e.name === "AbortError") {
+        // timed out
+    }
+}
+```
+
+The signal aborts the outer Promise. The native fetch keeps running and its result is discarded. Real native cancellation is deferred — see [`vault/planning/Async & Completion Handlers.md`](./vault/planning/Async%20%26%20Completion%20Handlers.md).
+
+## Streaming events
+
+Use `enumerateEvents` instead of `eventsMatchingPredicate` when the result set is large enough that buffering is undesirable. Throw from the block to abort:
+
+```ts
+const STOP = Symbol();
+try {
+    await store.enumerateEvents(p, (event) => {
+        if (event.title?.includes("found it")) throw STOP;
+        process(event);
+    });
+} catch (e) {
+    if (e !== STOP) throw e;
+}
+```
+
+## API reference
+
+Per-method status, signatures, and shape: [`docs/coverage.md`](./docs/coverage.md).
+
+## Development & design
+
+Project history, decisions, and roadmap: [`vault/Tracking.md`](./vault/Tracking.md). Each instruction in [`vault/instructions/`](./vault/instructions/) carries its own spec + Deployed-state record. Architecture and design tradeoffs: [`vault/planning/`](./vault/planning/).
+
+## Versioning
+
+Standard [semver](https://semver.org/). New Phase 6 features land as minor releases. Behaviour-preserving fixes are patches. Breaking changes (signature, return shape, removed exports) are major. Pre-1.0 work isn't in the version history.
+
+See [`CHANGELOG.md`](./CHANGELOG.md).
+
+## License
+
+ISC, see [`LICENSE`](./LICENSE).
