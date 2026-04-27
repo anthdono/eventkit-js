@@ -15,7 +15,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | Member | Status | Owning instruction |
 |---|---|---|
 | `init()` | ✅ | — |
-| `init(sources: EKSource[])` | 🟡 | deferred — multi-store support not on near-term roadmap |
+| `init(sources: EKSource[])` | ❌ | throws `Error` — single-store addon; multi-store off the roadmap |
 | `authorizationStatus(forEntityType)` | ✅ | — |
 
 ### Instance methods
@@ -36,12 +36,12 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `saveCalendar(c, commit)` | ✅ | — |
 | `removeCalendar(c, commit)` | ✅ | — |
 | `event(withIdentifier)` | ✅ | — |
-| `calendarItem(withIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
-| `calendarItems(withExternalIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
+| `calendarItem(withIdentifier)` | ✅ | takes a `calendarItemIdentifier` (not `eventIdentifier`); returns `EKEvent \| EKReminder \| null` |
+| `calendarItems(withExternalIdentifier)` | ✅ | bulk lookup by external id; returns `(EKEvent \| EKReminder)[]` |
 | `enumerateEvents(matching, block): Promise<void>` | ✅ | — |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
 | `fetchReminders(matching, options?): Promise<EKReminder[]>` | ✅ | — |
-| `cancelFetchRequest(id)` | 🟡 | superseded by `AbortSignal`; pass `{ signal }` to `fetchReminders` instead. Stays `NotImplemented`. |
+| `cancelFetchRequest(id)` | ❌ | throws `Error` — superseded by `AbortSignal`; pass `{ signal }` to `fetchReminders` instead. |
 | `predicateForEvents(start, end, calendars)` | ✅ | — |
 | `predicateForReminders(inCalendars)` | ✅ | — |
 | `predicateForCompletedReminders(start, end, calendars)` | ✅ | — |
@@ -68,7 +68,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `eventStoreIdentifier` | ✅ | — |
 | `defaultCalendarForNewEvents` | ✅ | — |
 | `sources` | ✅ | — |
-| `delegateSources` | 🟡 | — (explicitly deferred; no near-term consumer) |
+| `delegateSources` | ❌ | throws `Error` — Apple-deprecated since macOS 10.11; use `sources` |
 
 ---
 
@@ -89,7 +89,9 @@ Declared in `src/EKEvent.ts`. Populated by `_eventToNapi` in the native layer.
 | `hasAlarms` | `boolean` | ✅ | |
 | `hasRecurrenceRules` | `boolean` | ✅ | |
 | `hasAttendees` | `boolean` | ✅ | |
-| `eventIdentifier` | `string` | ✅ | |
+| `eventIdentifier` | `string` | ✅ | for `EKEventStore.event(id)` lookup |
+| `calendarItemIdentifier` | `string` | ✅ | for `EKEventStore.calendarItem(id)` lookup; distinct from `eventIdentifier` |
+| `calendarItemExternalIdentifier` | `string \| null` | ✅ | for `EKEventStore.calendarItems(extId)` lookup; iCalendar UID |
 | `availability` | `EKEventAvailability` | ✅ | string union: `"notSupported" \| "busy" \| "free" \| "tentative" \| "unavailable"` |
 | `startDate` | `Date` | ✅ | |
 | `endDate` | `Date` | ✅ | |
@@ -302,10 +304,10 @@ Convention: const-object-with-string-values + `typeof` alias, so the runtime val
 
 ## NotImplemented
 
-Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 method. A coverage scanner can grep for `throw new NotImplemented` to cross-check this matrix against reality.
+Declared in `src/NotImplemented.ts`. Re-exported from the public barrel for backwards compatibility, but no method on `EKEventStore` throws it as of 2026-04-27. The three surviving "not supported" methods (`init(sources)`, `cancelFetchRequest`, `delegateSources`) now throw plain `Error` with a message explaining the supersession or deprecation — see the ❌ rows above.
 
 ```bash
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **5** as of 2026-04-27. The residual five: `init(sources)`, `delegateSources`, `cancelFetchRequest` (intentionally `NotImplemented` per the `AbortSignal` supersession), `calendarItem`, `calendarItems`.
+Should return **0** as of 2026-04-27.

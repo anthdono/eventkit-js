@@ -2,13 +2,11 @@
 
 import { EventEmitter } from "events";
 import { EKCalendar } from "./EKCalendar";
-import { NotImplemented } from "./NotImplemented";
 import { EKSource } from "./EKSource";
 import { EKEntityType, _toNative as entityTypeToNative } from "./EKEntityType";
 import { EKAuthorizationStatus, _fromNative as authStatusFromNative } from "./EKAuthorizationStatus";
 import { EKSpan, _toNative as spanToNative } from "./EKSpan";
 import { EKEvent } from "./EKEvent";
-import { EKCalendarItem } from "./EKCalendarItem";
 import { EKReminder } from "./EKReminder";
 import { NSPredicate } from "./NSPredicate";
 import { _wrapNativeError } from "./EKError";
@@ -65,14 +63,13 @@ export class EKEventStore extends EventEmitter {
     public static init(): EKEventStore;
     public static init(sources: EKSource[]): EKEventStore;
     public static init(sources?: EKSource[]): EKEventStore {
-        let result: EKEventStore;
-        if(sources && sources instanceof Array){
-            throw new NotImplemented;
-        } else {
-            addon.init();
-            result = new EKEventStore();
+        if (sources && sources instanceof Array) {
+            // Apple's initWithSources: requires multi-store support; this addon
+            // currently runs a single shared EKEventStore (see vault/planning).
+            throw new Error("EKEventStore.init(sources) is not supported; this addon uses a single shared store. Open an issue if you need multi-store.");
         }
-        return result;
+        addon.init();
+        return new EKEventStore();
     }
 
     public requestWriteOnlyAccessToEvents(): Promise<boolean> {
@@ -144,12 +141,20 @@ export class EKEventStore extends EventEmitter {
         return addon.event(withIdentifier);
     }
 
-    public calendarItem(withIdentifier: string): EKCalendarItem | null {
-        throw new NotImplemented;
+    // Apple's calendarItemWithIdentifier: returns either an event or a reminder.
+    // The argument is a `calendarItemIdentifier` (inherited from EKCalendarItem) —
+    // distinct from `eventIdentifier`. For events, both fields are populated; pass
+    // `event.calendarItemIdentifier`, not `event.eventIdentifier`.
+    // Narrow the result with `'eventIdentifier' in item` (event) vs
+    // `'completed' in item` (reminder) at the call site.
+    public calendarItem(withIdentifier: string): EKEvent | EKReminder | null {
+        return addon.calendarItem(withIdentifier);
     }
 
-    public calendarItems(withExternalIdentifier: string): EKCalendarItem[] {
-        throw new NotImplemented;
+    // Bulk lookup by external identifier (e.g. iCalendar UID). Multiple items
+    // may share an external id across calendars; results may also be empty.
+    public calendarItems(withExternalIdentifier: string): (EKEvent | EKReminder)[] {
+        return addon.calendarItemsWithExternalIdentifier(withExternalIdentifier);
     }
 
     public save(event: EKEvent, span: EKSpan, commit?: boolean): void;
@@ -214,7 +219,7 @@ export class EKEventStore extends EventEmitter {
 
     // Superseded by AbortSignal — pass { signal } to fetchReminders instead.
     public cancelFetchRequest(fetchIdentifier: any): void {
-        throw new NotImplemented;
+        throw new Error("cancelFetchRequest is superseded by AbortSignal; pass { signal } to fetchReminders instead.");
     }
 
     public predicateForEvents(
@@ -259,8 +264,9 @@ export class EKEventStore extends EventEmitter {
         return addon.sources();
     }
 
+    // Apple deprecated delegateSources in macOS 10.11 — use sources instead.
     get delegateSources(): EKSource[] {
-        throw new NotImplemented;
+        throw new Error("delegateSources is deprecated by Apple as of macOS 10.11; use store.sources instead.");
     }
 
     // -------------------------------------------------------------------------

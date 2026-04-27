@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Continuous integration via GitHub Actions on `macos-latest` (Node 20, 22). Workflow at `.github/workflows/ci.yml` runs `npm ci` (rebuilds the native addon) + `npm run build:ts` + `npm test` on every push to `development` and every pull request. CI badge added to the readme. Manual-only tests stay skipped (the runner has no Calendar.app database and no `TEST_CALENDAR_ID` secret).
 - [`docs/migration-2-to-3.md`](./docs/migration-2-to-3.md) — migration guide covering the four breaking changes from 3.0.0 (string `availability` / `status`, expanded `organizer`, expanded `structuredLocation`, structured `EKError`).
 - README quickstart sections for recurrence, alarms, change notifications, calendar CRUD, and structured errors.
+- `EKEventStore.calendarItem(withIdentifier)` — returns `EKEvent | EKReminder | null` for any calendar item id (Apple's `calendarItemWithIdentifier:` dispatched on `isKindOfClass:`). Narrow with `'eventIdentifier' in item` vs `'completed' in item`. Note: takes a `calendarItemIdentifier`, not an `eventIdentifier` — the two are distinct fields on Apple's API.
+- `EKEventStore.calendarItems(withExternalIdentifier)` — bulk lookup by external identifier; returns `(EKEvent | EKReminder)[]` (Apple's `calendarItemsWithExternalIdentifier:`).
+- `EKEvent.calendarItemIdentifier` and `EKEvent.calendarItemExternalIdentifier` — base-class fields previously surfaced only on `EKReminder` are now exposed on `EKEvent` too. Required to call `calendarItem(id)` on an event.
+
+### Changed
+
+- `EKEventStore.init(sources)`, `EKEventStore.cancelFetchRequest(id)`, and `EKEventStore.delegateSources` (getter) now throw plain `Error` with a clear message explaining why the call is unsupported (single-store addon / superseded by `AbortSignal` / Apple-deprecated since macOS 10.11). Previously threw `NotImplemented`. No production caller relied on the old throw type.
 
 ## [3.0.1] — 2026-04-27
 

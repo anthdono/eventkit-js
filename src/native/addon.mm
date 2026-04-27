@@ -749,6 +749,8 @@ static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     _setOrNull(obj, "timeZone",                  [[ev timeZone] name]);
     _setOrNull(obj, "birthdayContactIdentifier", [ev birthdayContactIdentifier]);
     _setOrNull(obj, "eventIdentifier",           [ev eventIdentifier]);
+    _setOrNull(obj, "calendarItemIdentifier",    [ev calendarItemIdentifier]);
+    _setOrNull(obj, "calendarItemExternalIdentifier", [ev calendarItemExternalIdentifier]);
 
     obj.Set("organizer",          _participantToNapi(env, [ev organizer]));
     obj.Set("attendees",          _attendeesToNapi(env, [ev attendees]));
@@ -1307,6 +1309,35 @@ static Napi::Value Event(const Napi::CallbackInfo& info) {
     return _eventToNapi(info.Env(), ev);
 }
 
+// Apple's calendarItemWithIdentifier: returns EKCalendarItem* — concretely
+// either EKEvent* or EKReminder*. Discriminate via isKindOfClass: and marshal
+// through the existing helpers. TS callers narrow with `'eventIdentifier' in item`
+// (events) vs `'calendarItemIdentifier' in item && 'completed' in item` (reminders).
+static Napi::Value CalendarItem(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    std::string id = info[0].As<Napi::String>().Utf8Value();
+    EKCalendarItem* item = [store calendarItemWithIdentifier:@(id.c_str())];
+    if (item == nil) return env.Null();
+    if ([item isKindOfClass:[EKEvent class]])    return _eventToNapi(env, (EKEvent*)item);
+    if ([item isKindOfClass:[EKReminder class]]) return _reminderToNapi(env, (EKReminder*)item);
+    return env.Null();
+}
+
+static Napi::Value CalendarItemsWithExternalIdentifier(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    std::string id = info[0].As<Napi::String>().Utf8Value();
+    NSArray<EKCalendarItem*>* items = [store calendarItemsWithExternalIdentifier:@(id.c_str())];
+    Napi::Array out = Napi::Array::New(env, [items count]);
+    NSUInteger writeIdx = 0;
+    for (NSUInteger i = 0; i < [items count]; i++) {
+        EKCalendarItem* it = items[i];
+        if ([it isKindOfClass:[EKEvent class]])    out[writeIdx++] = _eventToNapi(env, (EKEvent*)it);
+        else if ([it isKindOfClass:[EKReminder class]]) out[writeIdx++] = _reminderToNapi(env, (EKReminder*)it);
+        // Unknown subclass — skip; Apple has no documented third option.
+    }
+    return out;
+}
+
 static Napi::Value EnumerateEvents(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     NSPredicate* p = _predicateFromExternal(info[0]);
@@ -1761,6 +1792,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("predicateForEvents",              Napi::Function::New(env, PredicateForEvents));
     exports.Set("eventsMatchingPredicate",         Napi::Function::New(env, EventsMatchingPredicate));
     exports.Set("event",                           Napi::Function::New(env, Event));
+    exports.Set("calendarItem",                    Napi::Function::New(env, CalendarItem));
+    exports.Set("calendarItemsWithExternalIdentifier", Napi::Function::New(env, CalendarItemsWithExternalIdentifier));
     exports.Set("enumerateEvents",                 Napi::Function::New(env, EnumerateEvents));
     exports.Set("saveEvent",                       Napi::Function::New(env, SaveEvent));
     exports.Set("removeEvent",                     Napi::Function::New(env, RemoveEvent));

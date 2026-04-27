@@ -25,6 +25,8 @@ export class EKEvent {
     hasAttendees: boolean;
 
     eventIdentifier: string;
+    calendarItemIdentifier: string;
+    calendarItemExternalIdentifier: string | null;
     availability: EKEventAvailability;
     startDate: Date;
     endDate: Date;

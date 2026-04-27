@@ -327,5 +327,63 @@ if (!isMac) {
             store.remove(fetched, EKSpan.THIS_EVENT);
             expect(store.event(createdId)).toBeNull();
         });
+
+        it("calendarItem returns null for an unknown identifier", () => {
+            expect(store.calendarItem("eventkit-js-nonexistent-id")).toBeNull();
+        });
+
+        it("calendarItems returns an empty array for an unknown external identifier", () => {
+            const items = store.calendarItems("eventkit-js-nonexistent-extid");
+            expect(Array.isArray(items)).toBe(true);
+            expect(items).toHaveLength(0);
+        });
+
+        // Manual-only: round-trip a saved event through calendarItem(id) and
+        // confirm the dispatch returns an EKEvent-shaped object.
+        // Apple's calendarItemWithIdentifier: takes a calendarItemIdentifier
+        // (not the eventIdentifier returned from saveEvent) — so we fetch the
+        // event first to read its calendarItemIdentifier, then look it up.
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "calendarItem(id) returns an event-shaped object for an event id (manual)",
+            () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKSpan } = require("../src/EKSpan");
+                const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+                const createdId: string = addon.saveEvent({
+                    title: "eventkit-js calendarItem test (delete me)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  cal,
+                }, 0, true);
+                try {
+                    const fetched: any = store.event(createdId);
+                    expect(fetched).not.toBeNull();
+                    expect(typeof fetched.calendarItemIdentifier).toBe("string");
+                    const item: any = store.calendarItem(fetched.calendarItemIdentifier);
+                    expect(item).not.toBeNull();
+                    expect(item.eventIdentifier).toBe(createdId);
+                    expect("completed" in item).toBe(false);
+                } finally {
+                    const f: any = store.event(createdId);
+                    if (f) store.remove(f, EKSpan.THIS_EVENT);
+                }
+            });
+
+        it("init(sources) throws a clear Error (not NotImplemented)", () => {
+            expect(() => EKEventStore.init([] as any))
+                .toThrow(/single shared store/);
+        });
+
+        it("delegateSources throws a clear Error (not NotImplemented)", () => {
+            expect(() => store.delegateSources)
+                .toThrow(/deprecated/);
+        });
+
+        it("cancelFetchRequest throws a clear Error (not NotImplemented)", () => {
+            expect(() => store.cancelFetchRequest("anything"))
+                .toThrow(/AbortSignal/);
+        });
     });
 }
