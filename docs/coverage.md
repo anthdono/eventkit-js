@@ -51,6 +51,16 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `remove(event, span[, commit])` | ✅ | — |
 | `remove(reminder, commit)` | ✅ | — |
 
+### Change notifications
+
+| Member | Status | Owning instruction |
+|---|---|---|
+| `on('change', listener)` | ✅ | — |
+| `off('change', listener)` | ✅ | — |
+| `removeAllListeners(['change'?])` | ✅ | — |
+
+`EKEventStore` extends Node's `EventEmitter`. Subscribing to `'change'` registers a single process-wide `NSNotificationCenter` observer for `EKEventStoreChangedNotification`; unsubscribing the last listener tears it down. The native fan-out uses `Napi::ThreadSafeFunction::NonBlockingCall` so a slow listener doesn't stall the NSNotificationCenter thread — change events are coalescable (consumer refetches the latest).
+
 ### Getters
 
 | Member | Status | Owning instruction |

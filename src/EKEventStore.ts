@@ -1,5 +1,6 @@
 // developer.apple.com/documentation/eventkit
 
+import { EventEmitter } from "events";
 import { EKCalendar } from "./EKCalendar";
 import { NotImplemented } from "./NotImplemented";
 import { EKSource } from "./EKSource";
@@ -14,9 +15,51 @@ import { _wrapNativeError } from "./EKError";
 
 const addon = require("../build/Release/addon");
 
-export class EKEventStore {
+// Single event the store emits: 'change', fired when the underlying
+// EventKit database changes (in this process or another). No payload —
+// consumers refetch on receipt.
+export type EKEventStoreEvents = {
+    change: [];
+};
+
+export class EKEventStore extends EventEmitter {
 
     public __brand = "EKEventStore";
+
+    // Native subscription id, populated lazily on the first 'change' listener.
+    private _changeSubscriptionId: number | null = null;
+
+    public on(event: "change", listener: () => void): this;
+    public on(event: string | symbol, listener: (...args: any[]) => void): this {
+        if (event === "change" && this._changeSubscriptionId === null) {
+            this._changeSubscriptionId = addon.subscribeChange(() => this.emit("change"));
+        }
+        return super.on(event, listener);
+    }
+
+    public off(event: "change", listener: () => void): this;
+    public off(event: string | symbol, listener: (...args: any[]) => void): this {
+        super.off(event, listener);
+        if (event === "change"
+            && this.listenerCount("change") === 0
+            && this._changeSubscriptionId !== null
+        ) {
+            addon.unsubscribeChange(this._changeSubscriptionId);
+            this._changeSubscriptionId = null;
+        }
+        return this;
+    }
+
+    public removeAllListeners(event?: string | symbol): this {
+        super.removeAllListeners(event);
+        if ((event === undefined || event === "change")
+            && this._changeSubscriptionId !== null
+        ) {
+            addon.unsubscribeChange(this._changeSubscriptionId);
+            this._changeSubscriptionId = null;
+        }
+        return this;
+    }
 
     // init
     public static init(): EKEventStore;

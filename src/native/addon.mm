@@ -13,6 +13,8 @@
 #include <EventKit/EKError.h>
 #include <Foundation/Foundation.h>
 #include <atomic>
+#include <mutex>
+#include <vector>
 #import "TestClass.mm"
 
 // -----------------------------------------------------------------------------
@@ -1455,6 +1457,92 @@ static Napi::Value RemoveCalendar(const Napi::CallbackInfo& info) {
 }
 
 // -----------------------------------------------------------------------------
+// ----------------------------- Change notifications --------------------------
+// -----------------------------------------------------------------------------
+
+// One process-wide NSNotificationCenter observer fanning out to N JS
+// subscribers via per-subscription Napi::ThreadSafeFunction. First
+// subscribe registers the observer; last unsubscribe deregisters it.
+
+struct ChangeSubscription {
+    uint64_t id;
+    Napi::ThreadSafeFunction tsfn;
+};
+
+static std::vector<ChangeSubscription*> activeSubscriptions;
+static std::mutex subscriptionsMutex;
+static id changeObserver = nil;
+static std::atomic<uint64_t> nextSubscriptionId{1};
+
+static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!info[0].IsFunction()) {
+        throw Napi::TypeError::New(env, "subscribeChange requires a callback function");
+    }
+    Napi::Function jsCallback = info[0].As<Napi::Function>();
+
+    Napi::ThreadSafeFunction tsfn = Napi::ThreadSafeFunction::New(
+        env, jsCallback, "ekStoreChange",
+        0,  // unlimited queue
+        1   // initial thread count
+    );
+
+    uint64_t id = nextSubscriptionId.fetch_add(1);
+    auto* sub = new ChangeSubscription{ id, tsfn };
+
+    {
+        std::lock_guard<std::mutex> lock(subscriptionsMutex);
+        activeSubscriptions.push_back(sub);
+
+        // First subscriber: register the NSNotificationCenter observer.
+        if (changeObserver == nil) {
+            changeObserver = [[[NSNotificationCenter defaultCenter]
+                addObserverForName:EKEventStoreChangedNotification
+                            object:nil
+                             queue:nil
+                        usingBlock:^(NSNotification* /*n*/) {
+                std::lock_guard<std::mutex> innerLock(subscriptionsMutex);
+                for (auto* s : activeSubscriptions) {
+                    // NonBlockingCall: drop on backpressure rather than
+                    // stall the NSNotificationCenter thread. Change events
+                    // are coalesce-able — consumer just refetches latest.
+                    s->tsfn.NonBlockingCall();
+                }
+            }] retain];
+        }
+    }
+
+    return Napi::Number::New(env, (double)id);
+}
+
+static Napi::Value UnsubscribeChange(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!info[0].IsNumber()) {
+        throw Napi::TypeError::New(env, "unsubscribeChange requires a numeric id");
+    }
+    uint64_t id = (uint64_t)info[0].As<Napi::Number>().DoubleValue();
+
+    std::lock_guard<std::mutex> lock(subscriptionsMutex);
+    for (auto it = activeSubscriptions.begin(); it != activeSubscriptions.end(); ++it) {
+        if ((*it)->id == id) {
+            (*it)->tsfn.Release();
+            delete *it;
+            activeSubscriptions.erase(it);
+            break;
+        }
+    }
+
+    // Last subscriber: deregister the NSNotificationCenter observer.
+    if (activeSubscriptions.empty() && changeObserver != nil) {
+        [[NSNotificationCenter defaultCenter] removeObserver:changeObserver];
+        [changeObserver release];
+        changeObserver = nil;
+    }
+
+    return env.Undefined();
+}
+
+// -----------------------------------------------------------------------------
 // --------------------------------- Node-API ----------------------------------
 // -----------------------------------------------------------------------------
 
@@ -1488,6 +1576,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("removeReminder",                   Napi::Function::New(env, RemoveReminder));
     exports.Set("saveCalendar",                     Napi::Function::New(env, SaveCalendar));
     exports.Set("removeCalendar",                   Napi::Function::New(env, RemoveCalendar));
+    exports.Set("subscribeChange",                  Napi::Function::New(env, SubscribeChange));
+    exports.Set("unsubscribeChange",                Napi::Function::New(env, UnsubscribeChange));
     return exports;
 }
 

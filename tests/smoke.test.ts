@@ -195,6 +195,51 @@ if (!isMac) {
             expect(() => store.refreshSourcesIfNecessary()).not.toThrow();
         });
 
+        it("on('change') / off('change') round-trips without leaking", () => {
+            const cb = () => {};
+            store.on("change", cb);
+            expect(store.listenerCount("change")).toBe(1);
+            store.off("change", cb);
+            expect(store.listenerCount("change")).toBe(0);
+        });
+
+        // Manual-only: requires TEST_CALENDAR_ID + reminder/event access. Verifies
+        // that creating an event via the addon fires a 'change' notification within
+        // a few seconds. NSNotificationCenter timing is at Apple's discretion.
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "emits 'change' when an event is saved (manual)",
+            async () => {
+                const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
+                expect(cal).not.toBeNull();
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+
+                const fired = new Promise<void>(resolve => store.once("change", resolve));
+                const id: string = addon.saveEvent({
+                    title: "eventkit-js change-notif test (delete me)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  cal,
+                }, 0, true);
+
+                try {
+                    await Promise.race([
+                        fired,
+                        new Promise<void>((_, rej) =>
+                            setTimeout(() => rej(new Error("'change' not fired in 5s")), 5000)
+                        ),
+                    ]);
+                } finally {
+                    const fetched: any = store.event(id);
+                    if (fetched) {
+                        // eslint-disable-next-line @typescript-eslint/no-var-requires
+                        const { EKSpan } = require("../src/EKSpan");
+                        store.remove(fetched, EKSpan.THIS_EVENT);
+                    }
+                }
+            }
+        );
+
         it("predicateForReminders returns an opaque handle", () => {
             const p = store.predicateForReminders(null);
             expect(typeof p).toBe("object");
