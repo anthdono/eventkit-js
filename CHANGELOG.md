@@ -5,13 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] — 2026-04-27
 
-### Breaking changes (require a major version bump when released)
+Phase 6 release. Closes the entire backlog laid out in 2.0.0's "Roadmap" section: recurrence rules, alarms, change notifications, full participant + structured-location shapes, structured `EKError`, calendar CRUD, and string-named availability/status enums.
 
-- `EKEvent.organizer` is now an `EKParticipant | null` (was `string | null`, surfacing only `participant.name`). Migration: `event.organizer.name` instead of `event.organizer`.
-- `EKEvent.structuredLocation` is now an `EKStructuredLocation | null` with `title` / `geoLocation: { latitude, longitude } | null` / `radius` (was `string | null`, surfacing only `location.title`). Migration: `event.structuredLocation?.title`.
-- `EKEvent.availability` is now an `EKEventAvailability` string union (was `number` raw Apple enum code). Migration: compare against `EKEventAvailability.BUSY` etc instead of integers.
+### Breaking changes
+
+- `EKEvent.organizer` is now an `EKParticipant | null` (was `string | null`, surfacing only `participant.name`). **Migration:** `event.organizer?.name` instead of `event.organizer`.
+- `EKEvent.structuredLocation` is now an `EKStructuredLocation | null` with `title` / `geoLocation: { latitude, longitude } | null` / `radius` (was `string | null`, surfacing only `location.title`). **Migration:** `event.structuredLocation?.title`.
+- `EKEvent.availability` is now an `EKEventAvailability` string union (was `number` raw Apple enum code). **Migration:** compare against `EKEventAvailability.BUSY` etc instead of integer literals.
 - `EKEvent.status` is now an `EKEventStatus` string union (was `number`). Same migration shape as `availability`.
 
 ### Added
@@ -34,7 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EKEvent.organizer` / `attendees` / `structuredLocation` / `availability` / `status` shapes changed (see "Breaking changes" above).
 - Native error throws across `saveEvent` / `removeEvent` / `commit` / `saveReminder` / `removeReminder` / access-request paths now carry the structured `code`/`domain`/`underlying` payload via `_napiErrorFromNSError`. The TS wrapper in each public method translates the integer code to the string-named const before re-throwing as `EKError`.
 
+### Known limitations (post-3.0)
 
+- `EKEventStore.init(sources)` (filtered store) and `EKEventStore.delegateSources` — both throw `NotImplemented`. Single-static-store covers every documented consumer use case; multi-instance support waits on a concrete need.
+- `cancelFetchRequest(id)` — superseded by `AbortSignal`; stays `NotImplemented`. Pass `{ signal }` to `fetchReminders` instead.
+- `calendarItem(withIdentifier)` / `calendarItems(withExternalIdentifier)` — orphan polymorphic reads. `event(...)` and `fetchReminders(...)` cover the typed-access paths.
+- `EKVirtualConferenceProvider` — Apple's meeting-link-provider class is not surfaced. Niche.
+- Native cancellation of an in-flight `fetchReminders` is still TS-only; `AbortSignal` rejects the outer Promise, but the inner Apple fetch keeps running.
+- Single static `EKEventStore` per process; calling `EKEventStore.init()` twice silently leaks the first.
+- `request*Access*` methods are macOS 14+ only; older macOS throws synchronously.
+- macOS-only via `os: ["darwin"]` whitelist.
+
+## [2.0.0] — 2026-04-27
 
 Initial public release of this codebase. Pre-2.0 work was internal-only and is not part of this version history.
 
@@ -78,4 +91,5 @@ Initial public release of this codebase. Pre-2.0 work was internal-only and is n
 - Single static `EKEventStore` per process; calling `EKEventStore.init()` twice silently leaks the first.
 - macOS-only via `os: ["darwin"]` whitelist; `npm install` refuses on Linux/Windows.
 
+[3.0.0]: https://github.com/anthdono/eventkit-js/releases/tag/v3.0.0
 [2.0.0]: https://github.com/anthdono/eventkit-js/releases/tag/v2.0.0
