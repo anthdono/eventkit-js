@@ -130,6 +130,39 @@ if (!isMac) {
             expect(store.event("this-is-not-a-real-event-id")).toBeNull();
         });
 
+        it("eventsMatchingPredicateAsync resolves with the same events as the sync sibling", async () => {
+            const start = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+            const end = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+            const cals = store.calendars(EKEntityType.EVENT);
+            const p = store.predicateForEvents(start, end, cals);
+            const sync  = store.eventsMatchingPredicate(p);
+            const async = await store.eventsMatchingPredicateAsync(p);
+            expect(Array.isArray(async)).toBe(true);
+            expect(async.length).toBe(sync.length);
+            const a = new Set(async.map((e: any) => e.eventIdentifier));
+            const b = new Set(sync.map((e: any) => e.eventIdentifier));
+            for (const id of b) expect(a.has(id)).toBe(true);
+        });
+
+        it("eventsMatchingPredicateAsync rejects with AbortError when signal pre-aborted", async () => {
+            const start = new Date(Date.now() - 1000);
+            const end = new Date(Date.now() + 1000);
+            const p = store.predicateForEvents(start, end, store.calendars(EKEntityType.EVENT));
+            const ctrl = new AbortController();
+            ctrl.abort();
+            await expect(store.eventsMatchingPredicateAsync(p, { signal: ctrl.signal }))
+                .rejects.toMatchObject({ name: "AbortError" });
+        });
+
+        it("eventsMatchingPredicateAsync resolves normally when signal not aborted", async () => {
+            const start = new Date(Date.now() - 1000);
+            const end = new Date(Date.now() + 1000);
+            const p = store.predicateForEvents(start, end, store.calendars(EKEntityType.EVENT));
+            const ctrl = new AbortController();
+            const res = await store.eventsMatchingPredicateAsync(p, { signal: ctrl.signal });
+            expect(Array.isArray(res)).toBe(true);
+        });
+
         it("event(first-matched-id) round-trips", () => {
             const start = new Date(Date.now() - 30 * 24 * 3600 * 1000);
             const end = new Date(Date.now() + 30 * 24 * 3600 * 1000);

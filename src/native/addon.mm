@@ -1302,6 +1302,47 @@ static Napi::Value EventsMatchingPredicate(const Napi::CallbackInfo& info) {
     return result;
 }
 
+// Promise-returning sibling of EventsMatchingPredicate. Apple's
+// eventsMatchingPredicate: itself is synchronous, so we wrap it in a
+// dispatch_async on a background queue. The TS layer adds optional
+// AbortSignal handling.
+struct AsyncEventsCtx {
+    Napi::Promise::Deferred deferred;
+    AsyncEventsCtx(Napi::Env env) : deferred(Napi::Promise::Deferred::New(env)) {}
+};
+struct AsyncEventsPayload {
+    NSArray<EKEvent*>* __strong events;
+};
+
+static Napi::Value EventsMatchingPredicateAsync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    NSPredicate* p = _predicateFromExternal(info[0]);
+
+    auto* ctx = new AsyncEventsCtx(env);
+    auto promise = ctx->deferred.Promise();
+
+    Napi::ThreadSafeFunction tsfn = Napi::ThreadSafeFunction::New(
+        env, Napi::Function(), "eventsMatchingPredicateAsync", 0, 1
+    );
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSArray<EKEvent*>* events = [store eventsMatchingPredicate:p];
+        AsyncEventsPayload* payload = new AsyncEventsPayload{ events };
+        tsfn.BlockingCall(payload, [ctx](Napi::Env env, Napi::Function, AsyncEventsPayload* pl) {
+            Napi::Array arr = Napi::Array::New(env, [pl->events count]);
+            for (NSUInteger i = 0; i < [pl->events count]; i++) {
+                arr[i] = _eventToNapi(env, pl->events[i]);
+            }
+            ctx->deferred.Resolve(arr);
+            delete pl;
+            delete ctx;
+        });
+        tsfn.Release();
+    });
+
+    return promise;
+}
+
 static Napi::Value Event(const Napi::CallbackInfo& info) {
     std::string id = info[0].As<Napi::String>().Utf8Value();
     EKEvent* ev = [store eventWithIdentifier:@(id.c_str())];
@@ -1789,6 +1830,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("source",                          Napi::Function::New(env, Source));
     exports.Set("predicateForEvents",              Napi::Function::New(env, PredicateForEvents));
     exports.Set("eventsMatchingPredicate",         Napi::Function::New(env, EventsMatchingPredicate));
+    exports.Set("eventsMatchingPredicateAsync",    Napi::Function::New(env, EventsMatchingPredicateAsync));
     exports.Set("event",                           Napi::Function::New(env, Event));
     exports.Set("calendarItem",                    Napi::Function::New(env, CalendarItem));
     exports.Set("calendarItemsWithExternalIdentifier", Napi::Function::New(env, CalendarItemsWithExternalIdentifier));

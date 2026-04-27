@@ -196,6 +196,31 @@ export class EKEventStore extends EventEmitter {
         return addon.eventsMatchingPredicate(matching);
     }
 
+    // Promise-returning sibling — runs the fetch on a background queue.
+    // Pass `{ signal }` for cancellation; the abort rejects the outer
+    // promise but the underlying Apple call keeps running and its result
+    // is discarded (Apple's API has no native cancel hook).
+    public eventsMatchingPredicateAsync(
+        matching: NSPredicate,
+        options?: { signal?: AbortSignal }
+    ): Promise<EKEvent[]> {
+        const inner: Promise<EKEvent[]> = addon.eventsMatchingPredicateAsync(matching);
+        const signal = options?.signal;
+        if (!signal) return inner;
+        return new Promise((resolve, reject) => {
+            if (signal.aborted) {
+                reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+                return;
+            }
+            const onAbort = () => reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+            signal.addEventListener("abort", onAbort, { once: true });
+            inner.then(
+                v => { signal.removeEventListener("abort", onAbort); resolve(v); },
+                e => { signal.removeEventListener("abort", onAbort); reject(e); }
+            );
+        });
+    }
+
     public fetchReminders(
         matching: NSPredicate,
         options?: { signal?: AbortSignal }

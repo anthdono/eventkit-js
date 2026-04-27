@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EKEventStore.calendarItem(withIdentifier)` — returns `EKEvent | EKReminder | null` for any calendar item id (Apple's `calendarItemWithIdentifier:` dispatched on `isKindOfClass:`). Narrow with `'eventIdentifier' in item` vs `'completed' in item`. Note: takes a `calendarItemIdentifier`, not an `eventIdentifier` — the two are distinct fields on Apple's API.
 - `EKEventStore.calendarItems(withExternalIdentifier)` — bulk lookup by external identifier; returns `(EKEvent | EKReminder)[]` (Apple's `calendarItemsWithExternalIdentifier:`).
 - `EKEvent.calendarItemIdentifier` and `EKEvent.calendarItemExternalIdentifier` — base-class fields previously surfaced only on `EKReminder` are now exposed on `EKEvent` too. Required to call `calendarItem(id)` on an event.
+- `EKEventStore.eventsMatchingPredicateAsync(predicate, options?)` — Promise-returning sibling of `eventsMatchingPredicate`. Apple's API is synchronous, so the fetch runs on a `QOS_CLASS_USER_INITIATED` background queue and resolves on the V8 thread via threadsafe-function. Supports `{ signal: AbortSignal }` for cancellation (TS-only — the inner Apple fetch keeps running and its result is discarded; mirrors `fetchReminders`).
 
 ### Changed
 

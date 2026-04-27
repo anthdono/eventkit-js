@@ -40,6 +40,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `calendarItems(withExternalIdentifier)` | ✅ | bulk lookup by external id; returns `(EKEvent \| EKReminder)[]` |
 | `enumerateEvents(matching, block): Promise<void>` | ✅ | — |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
+| `eventsMatchingPredicateAsync(matching, options?)` | ✅ | Promise-returning; runs on background queue; supports `{ signal }` AbortSignal |
 | `fetchReminders(matching, options?): Promise<EKReminder[]>` | ✅ | — |
 | `cancelFetchRequest(id)` | ❌ | throws `Error` — superseded by `AbortSignal`; pass `{ signal }` to `fetchReminders` instead. |
 | `predicateForEvents(start, end, calendars)` | ✅ | — |
