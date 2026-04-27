@@ -371,6 +371,253 @@ if (!isMac) {
                 }
             });
 
+        // Manual-only: recurrence rule round-trip.
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "recurrence rule round-trips through save/fetch (manual)",
+            () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKSpan } = require("../src/EKSpan");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKRecurrenceFrequency } = require("../src/EKRecurrenceFrequency");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKWeekday } = require("../src/EKWeekday");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+                const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
+
+                const createdId: string = addon.saveEvent({
+                    title: "eventkit-js recurrence test (delete me)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  cal,
+                    recurrenceRules: [{
+                        frequency: EKRecurrenceFrequency.WEEKLY,
+                        interval: 2,
+                        end: { occurrenceCount: 10 },
+                        daysOfTheWeek: [
+                            { dayOfTheWeek: EKWeekday.MONDAY,    weekNumber: 0 },
+                            { dayOfTheWeek: EKWeekday.WEDNESDAY, weekNumber: 0 },
+                        ],
+                        daysOfTheMonth:  null,
+                        monthsOfTheYear: null,
+                        weeksOfTheYear:  null,
+                        daysOfTheYear:   null,
+                        setPositions:    null,
+                    }],
+                }, 1, true); // span=futureEvents
+                try {
+                    const fetched: any = store.event(createdId);
+                    expect(fetched).not.toBeNull();
+                    expect(Array.isArray(fetched.recurrenceRules)).toBe(true);
+                    expect(fetched.recurrenceRules.length).toBeGreaterThanOrEqual(1);
+                    const r = fetched.recurrenceRules[0];
+                    expect(r.frequency).toBe(EKRecurrenceFrequency.WEEKLY);
+                    expect(r.interval).toBe(2);
+                    expect(r.end?.occurrenceCount).toBe(10);
+                    const days = (r.daysOfTheWeek ?? []).map((d: any) => d.dayOfTheWeek);
+                    expect(days).toEqual(expect.arrayContaining([EKWeekday.MONDAY, EKWeekday.WEDNESDAY]));
+                } finally {
+                    const f: any = store.event(createdId);
+                    if (f) store.remove(f, EKSpan.FUTURE_EVENTS);
+                }
+            });
+
+        // Manual-only: alarms (relative + absolute) round-trip.
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "alarms (relative + absolute) round-trip (manual)",
+            () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKSpan } = require("../src/EKSpan");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKAlarmType } = require("../src/EKAlarmType");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKAlarmProximity } = require("../src/EKAlarmProximity");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+                const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
+                // Apple stores alarm.absoluteDate at second granularity; zero
+                // the millis so the round-trip is exact.
+                const absDate = new Date(Date.now() + 24 * 3600 * 1000);
+                absDate.setMilliseconds(0);
+
+                const createdId: string = addon.saveEvent({
+                    title: "eventkit-js alarms test (delete me)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  cal,
+                    alarms: [
+                        {
+                            relativeOffset: -15 * 60,
+                            absoluteDate:   null,
+                            type:           EKAlarmType.DISPLAY,
+                            proximity:      EKAlarmProximity.NONE,
+                            structuredLocation: null,
+                            emailAddress:   null,
+                            soundName:      null,
+                        },
+                        {
+                            relativeOffset: null,
+                            absoluteDate:   absDate,
+                            type:           EKAlarmType.DISPLAY,
+                            proximity:      EKAlarmProximity.NONE,
+                            structuredLocation: null,
+                            emailAddress:   null,
+                            soundName:      null,
+                        },
+                    ],
+                }, 0, true);
+                try {
+                    const fetched: any = store.event(createdId);
+                    expect(fetched).not.toBeNull();
+                    expect(Array.isArray(fetched.alarms)).toBe(true);
+                    expect(fetched.alarms.length).toBe(2);
+                    const rel = fetched.alarms.find((a: any) => a.relativeOffset != null);
+                    const abs = fetched.alarms.find((a: any) => a.absoluteDate != null);
+                    expect(rel.relativeOffset).toBe(-15 * 60);
+                    expect(abs.absoluteDate.getTime()).toBe(absDate.getTime());
+                } finally {
+                    const f: any = store.event(createdId);
+                    if (f) store.remove(f, EKSpan.THIS_EVENT);
+                }
+            });
+
+        // Manual-only: structured location with geo coordinates + radius.
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "structured location with geoLocation + radius round-trips (manual)",
+            () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKSpan } = require("../src/EKSpan");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+                const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
+
+                const createdId: string = addon.saveEvent({
+                    title: "eventkit-js structured-location test (delete me)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  cal,
+                    structuredLocation: {
+                        title: "Anthropic SF",
+                        geoLocation: { latitude: 37.78, longitude: -122.41 },
+                        radius: 50,
+                    },
+                }, 0, true);
+                try {
+                    const fetched: any = store.event(createdId);
+                    expect(fetched).not.toBeNull();
+                    expect(fetched.structuredLocation).not.toBeNull();
+                    expect(fetched.structuredLocation.title).toBe("Anthropic SF");
+                    expect(fetched.structuredLocation.geoLocation).not.toBeNull();
+                    expect(fetched.structuredLocation.geoLocation.latitude).toBeCloseTo(37.78, 4);
+                    expect(fetched.structuredLocation.geoLocation.longitude).toBeCloseTo(-122.41, 4);
+                    expect(fetched.structuredLocation.radius).toBe(50);
+                } finally {
+                    const f: any = store.event(createdId);
+                    if (f) store.remove(f, EKSpan.THIS_EVENT);
+                }
+            });
+
+        // Manual-only: event.availability string round-trip.
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "event.availability round-trips through 'tentative' (manual)",
+            () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKSpan } = require("../src/EKSpan");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKEventAvailability } = require("../src/EKEventAvailability");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+                const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
+
+                const createdId: string = addon.saveEvent({
+                    title: "eventkit-js availability test (delete me)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  cal,
+                    availability: EKEventAvailability.TENTATIVE,
+                }, 0, true);
+                try {
+                    const fetched: any = store.event(createdId);
+                    expect(fetched).not.toBeNull();
+                    expect(fetched.availability).toBe(EKEventAvailability.TENTATIVE);
+                } finally {
+                    const f: any = store.event(createdId);
+                    if (f) store.remove(f, EKSpan.THIS_EVENT);
+                }
+            });
+
+        // Auto-detected read-only calendar: any calendar with
+        // allowsContentModifications === false (Birthdays, Holidays, etc.).
+        // Saving into one should throw EKError with code CALENDAR_READ_ONLY.
+        it("save throws EKError with .code on a read-only calendar", () => {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { EKSpan } = require("../src/EKSpan");
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { EKError } = require("../src/EKError");
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { EKErrorCode } = require("../src/EKErrorCode");
+            const cals = store.calendars(EKEntityType.EVENT);
+            const readonly = cals.find((c: any) => c.allowsContentModifications === false);
+            if (!readonly) return; // no read-only calendar available; skip
+
+            let threw = false;
+            try {
+                store.save({
+                    title: "eventkit-js read-only test (should fail)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  readonly,
+                } as any, EKSpan.THIS_EVENT, true);
+            } catch (e: any) {
+                threw = true;
+                expect(e).toBeInstanceOf(EKError);
+                expect(typeof e.code).toBe("string");
+                // Apple may return any of these depending on calendar/source.
+                expect([
+                    EKErrorCode.CALENDAR_READ_ONLY,
+                    EKErrorCode.CALENDAR_IS_IMMUTABLE,
+                    EKErrorCode.CALENDAR_SOURCE_CANNOT_BE_MODIFIED,
+                ]).toContain(e.code);
+            }
+            expect(threw).toBe(true);
+        });
+
+        // Manual-only: calendar create/mutate/remove round-trip. Creates a
+        // real calendar in the user's database and removes it on teardown.
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "calendar create/mutate/remove round-trips with color (manual)",
+            () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKEntityType: ET } = require("../src/EKEntityType");
+                const local = store.sources.find((s: any) => s.sourceType === "local");
+                if (!local) return; // no local source — iCloud-only setups skip
+                const title = "eventkit-js cal-mutate-" + Date.now();
+                const cal: any = {
+                    title,
+                    color: "#00FF00",
+                    sourceIdentifier: local.sourceIdentifier,
+                    allowedEntityTypes: [ET.EVENT],
+                };
+                store.saveCalendar(cal, true);
+                try {
+                    expect(typeof cal.calendarIdentifier).toBe("string");
+                    const fetched: any = store.calendar(cal.calendarIdentifier);
+                    expect(fetched).not.toBeNull();
+                    expect(fetched.title).toBe(title);
+                    expect(fetched.color?.toUpperCase()).toBe("#00FF00");
+                    // Mutate.
+                    fetched.title = title + "-mutated";
+                    fetched.color = "#0000FF";
+                    store.saveCalendar(fetched, true);
+                    const refetched: any = store.calendar(cal.calendarIdentifier);
+                    expect(refetched.title).toBe(title + "-mutated");
+                    expect(refetched.color?.toUpperCase()).toBe("#0000FF");
+                } finally {
+                    const f: any = store.calendar(cal.calendarIdentifier);
+                    if (f) store.removeCalendar(f, true);
+                }
+            });
+
         it("init(sources) throws a clear Error (not NotImplemented)", () => {
             expect(() => EKEventStore.init([] as any))
                 .toThrow(/single shared store/);

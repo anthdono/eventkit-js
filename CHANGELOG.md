@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `EKEventStore.init(sources)`, `EKEventStore.cancelFetchRequest(id)`, and `EKEventStore.delegateSources` (getter) now throw plain `Error` with a clear message explaining why the call is unsupported (single-store addon / superseded by `AbortSignal` / Apple-deprecated since macOS 10.11). Previously threw `NotImplemented`. No production caller relied on the old throw type.
 
+### Tests
+
+- Round-trip coverage added for: recurrence rules (`WEEKLY` with `daysOfTheWeek`), alarms (relative + absolute together), structured location with `geoLocation` + `radius`, `event.availability`, calendar create/mutate/remove with `color`. One unconditional test asserts that saving into a read-only calendar throws `EKError` with one of the read-only-family codes.
+
 ## [3.0.1] — 2026-04-27
 
 Patch release. **Use this instead of 3.0.0** — the 3.0.0 tarball on npm was published from an intermediate diagnostic commit and emits `[eventkit-js] …` stderr noise on every save plus has a partially-broken change-notification path. Functionally usable but not what was intended; corrected here.
