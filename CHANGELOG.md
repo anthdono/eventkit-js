@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] — 2026-04-27
+
+Patch release. **Use this instead of 3.0.0** — the 3.0.0 tarball on npm was published from an intermediate diagnostic commit and emits `[eventkit-js] …` stderr noise on every save plus has a partially-broken change-notification path. Functionally usable but not what was intended; corrected here.
+
+### Fixed
+
+- **Change notifications now fire reliably.** `EKEventStoreChangedNotification` is posted via a `CFRunLoopSource` that requires a run-loop iteration to deliver — but libuv doesn't pump Cocoa run loops. Without a drain, the notification queued indefinitely and `store.on('change', cb)` never fired. Fix: `CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true)` after every write op (save/remove/commit on events, reminders, calendars). Single non-blocking iteration; fast path is microseconds.
+- Stripped diagnostic `fprintf(stderr, …)` calls that leaked into the 3.0.0 publish.
+
 ## [3.0.0] — 2026-04-27
 
 Phase 6 release. Closes the entire backlog laid out in 2.0.0's "Roadmap" section: recurrence rules, alarms, change notifications, full participant + structured-location shapes, structured `EKError`, calendar CRUD, and string-named availability/status enums.
@@ -91,5 +100,6 @@ Initial public release of this codebase. Pre-2.0 work was internal-only and is n
 - Single static `EKEventStore` per process; calling `EKEventStore.init()` twice silently leaks the first.
 - macOS-only via `os: ["darwin"]` whitelist; `npm install` refuses on Linux/Windows.
 
+[3.0.1]: https://github.com/anthdono/eventkit-js/releases/tag/v3.0.1
 [3.0.0]: https://github.com/anthdono/eventkit-js/releases/tag/v3.0.0
 [2.0.0]: https://github.com/anthdono/eventkit-js/releases/tag/v2.0.0
