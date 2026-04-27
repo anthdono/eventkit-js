@@ -91,6 +91,7 @@ Declared in `src/EKEvent.ts`. Populated by `_eventToNapi` in the native layer.
 | `birthdayContactIdentifier` | `string \| null` | ✅ | |
 | `structuredLocation` | `string \| null` | ✅ | shallow proxy: `location.title`; full `EKStructuredLocation` deferred to Phase 6 |
 | `recurrenceRules` | `EKRecurrenceRule[] \| null` | ✅ | full marshal via `_recurrenceRulesToNapi`; clear-and-add on save |
+| `alarms` | `EKAlarm[] \| null` | ✅ | full marshal via `_alarmsToNapi`; clear-and-add on save |
 
 ---
 
@@ -145,6 +146,7 @@ Declared in `src/EKReminder.ts`. Populated by `_reminderToNapi` in the native la
 | `priority` | `number` | ✅ | Apple integer 0–9 (0 = none) |
 | `startDateComponents` | `DateComponents \| null` | ✅ | |
 | `dueDateComponents` | `DateComponents \| null` | ✅ | |
+| `alarms` | `EKAlarm[] \| null` | ✅ | full marshal via `_alarmsToNapi`; clear-and-add on save |
 
 `DateComponents` (interface, not const-object enum):
 
@@ -187,6 +189,25 @@ Native helpers: `_recurrenceRuleToNapi` (read), `_jsToEKRecurrenceRule` (write �
 
 ---
 
+## EKAlarm
+
+Declared in `src/EKAlarm.ts` (interface, not class — alarms are pure data). Read via `EKEvent.alarms` and `EKReminder.alarms`; written by setting that field and calling `store.save(...)` (clear-and-add semantics).
+
+| Property | Type | Notes |
+|---|---|---|
+| `relativeOffset` | `number \| null` | seconds before/after event start (negative = before); `null` when `absoluteDate` is set |
+| `absoluteDate` | `Date \| null` | absolute trigger; `null` when `relativeOffset` is set |
+| `type` | `EKAlarmType` | `"display" \| "audio" \| "procedure" \| "email"`; read-only on Apple — derived from which fields are set |
+| `proximity` | `EKAlarmProximity` | `"none" \| "enter" \| "leave"` — geofence direction for location alarms |
+| `structuredLocation` | `string \| null` | shallow proxy: `location.title`. Deepens to full `EKStructuredLocation` when instruction 16 ships. |
+| `emailAddress` | `string \| null` | for `type: "email"` alarms |
+| `soundName` | `string \| null` | for `type: "audio"` alarms |
+| `url` | `string \| null` | for procedure alarms (Apple-deprecated but in the enum) |
+
+Construction: pass exactly one of `relativeOffset` or `absoluteDate`. Native throws if both or neither are provided.
+
+---
+
 ## EKError
 
 Declared in `src/EKError.ts`. Subclasses `Error`; thrown by `save` / `remove` / `commit` / `request*Access*` whenever Apple's API returns an `NSError`. `instanceof Error` still passes — additive for typical consumers.
@@ -223,6 +244,8 @@ Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) a
 | `EKRecurrenceFrequency` | `src/EKRecurrenceFrequency.ts` | const object + `typeof` | `"daily"`, `"weekly"`, `"monthly"`, `"yearly"` |
 | `EKWeekday` | `src/EKWeekday.ts` | const object + `typeof` | `"sunday"` … `"saturday"` (Apple raw 1..7) |
 | `EKErrorCode` | `src/EKErrorCode.ts` | const object + `typeof` | 32 values, e.g. `"eventNotMutable"`, `"calendarReadOnly"`, `"unknown"` (catch-all for forward-compat) |
+| `EKAlarmType` | `src/EKAlarmType.ts` | const object + `typeof` | `"display"`, `"audio"`, `"procedure"`, `"email"` |
+| `EKAlarmProximity` | `src/EKAlarmProximity.ts` | const object + `typeof` | `"none"`, `"enter"`, `"leave"` |
 | `DateComponents` | `src/EKReminder.ts` | **interface** (not const-object) | shape: `{ year, month, day, hour, minute, second }`, each `number \| null` |
 
 Convention: const-object-with-string-values + `typeof` alias, so the runtime values are JSON-friendly strings and string-equality checks work across the napi boundary.

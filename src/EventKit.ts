@@ -20,6 +20,9 @@ import type {
 } from "./EKRecurrenceRule";
 import { EKError } from "./EKError";
 import { EKErrorCode } from "./EKErrorCode";
+import { EKAlarmType } from "./EKAlarmType";
+import { EKAlarmProximity } from "./EKAlarmProximity";
+import type { EKAlarm } from "./EKAlarm";
 
 export {
     EKEventStore,
@@ -39,9 +42,12 @@ export {
     EKWeekday,
     EKError,
     EKErrorCode,
+    EKAlarmType,
+    EKAlarmProximity,
 };
 export type {
     EKRecurrenceRule,
     EKRecurrenceEnd,
     EKRecurrenceDayOfWeek,
+    EKAlarm,
 };

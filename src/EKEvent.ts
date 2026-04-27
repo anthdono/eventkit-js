@@ -8,6 +8,7 @@
 
 import { EKCalendar } from "./EKCalendar";
 import { EKRecurrenceRule } from "./EKRecurrenceRule";
+import { EKAlarm } from "./EKAlarm";
 
 export class EKEvent {
     calendar: EKCalendar;
@@ -34,4 +35,5 @@ export class EKEvent {
     birthdayContactIdentifier: string | null;
     structuredLocation: string | null;
     recurrenceRules: EKRecurrenceRule[] | null;
+    alarms: EKAlarm[] | null;
 }

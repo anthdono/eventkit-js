@@ -10,6 +10,7 @@
 //     preserves that flexibility losslessly.
 
 import { EKCalendar } from "./EKCalendar";
+import { EKAlarm } from "./EKAlarm";
 
 export interface DateComponents {
     year: number | null;
@@ -40,4 +41,5 @@ export class EKReminder {
     priority: number;
     startDateComponents: DateComponents | null;
     dueDateComponents: DateComponents | null;
+    alarms: EKAlarm[] | null;
 }

@@ -8,6 +8,8 @@
 #include <EventKit/EKRecurrenceRule.h>
 #include <EventKit/EKRecurrenceEnd.h>
 #include <EventKit/EKRecurrenceDayOfWeek.h>
+#include <EventKit/EKAlarm.h>
+#include <EventKit/EKStructuredLocation.h>
 #include <Foundation/Foundation.h>
 #include <atomic>
 #import "TestClass.mm"
@@ -329,6 +331,142 @@ static EKRecurrenceRule* _jsToEKRecurrenceRule(Napi::Env env, Napi::Object sourc
     return [rule autorelease];
 }
 
+// -----------------------------------------------------------------------------
+// ---------------------------------- Alarms -----------------------------------
+// -----------------------------------------------------------------------------
+
+static const char* _ekAlarmTypeToString(EKAlarmType t) {
+    switch (t) {
+        case EKAlarmTypeDisplay:   return "display";
+        case EKAlarmTypeAudio:     return "audio";
+        case EKAlarmTypeProcedure: return "procedure";
+        case EKAlarmTypeEmail:     return "email";
+    }
+    return "display";
+}
+
+static const char* _ekAlarmProximityToString(EKAlarmProximity p) {
+    switch (p) {
+        case EKAlarmProximityNone:  return "none";
+        case EKAlarmProximityEnter: return "enter";
+        case EKAlarmProximityLeave: return "leave";
+    }
+    return "none";
+}
+
+static EKAlarmProximity _stringToEKAlarmProximity(Napi::Env env, const std::string& s) {
+    if (s == "none")  return EKAlarmProximityNone;
+    if (s == "enter") return EKAlarmProximityEnter;
+    if (s == "leave") return EKAlarmProximityLeave;
+    throw Napi::Error::New(env, std::string("Unknown EKAlarmProximity: ") + s);
+}
+
+static Napi::Object _alarmToNapi(Napi::Env env, EKAlarm* a) {
+    Napi::Object obj = Napi::Object::New(env);
+
+    // Trigger: exactly one of relativeOffset/absoluteDate is set on a fetched
+    // alarm. Apple's API returns 0 / nil for the unset one. We discriminate
+    // on absoluteDate non-nil — that's the "absolute" path; otherwise we
+    // surface relativeOffset (which may legitimately be 0 for "at event start").
+    NSDate* abs = [a absoluteDate];
+    if (abs != nil) {
+        obj.Set("absoluteDate",   Napi::Date::New(env, [abs timeIntervalSince1970] * 1000.0));
+        obj.Set("relativeOffset", env.Null());
+    } else {
+        obj.Set("absoluteDate",   env.Null());
+        obj.Set("relativeOffset", (double)[a relativeOffset]);
+    }
+
+    obj.Set("type",      _ekAlarmTypeToString([a type]));
+    obj.Set("proximity", _ekAlarmProximityToString([a proximity]));
+
+    // Shallow proxy until instruction 16 lands.
+    EKStructuredLocation* sl = [a structuredLocation];
+    if (sl != nil && [sl title] != nil) {
+        obj.Set("structuredLocation", [[sl title] UTF8String]);
+    } else {
+        obj.Set("structuredLocation", env.Null());
+    }
+
+    _setOrNull(obj, "emailAddress", [a emailAddress]);
+    _setOrNull(obj, "soundName",    [a soundName]);
+    _setOrNull(obj, "url",          [[a url] absoluteString]);
+
+    return obj;
+}
+
+static Napi::Value _alarmsToNapi(Napi::Env env, NSArray<EKAlarm*>* alarms) {
+    if (alarms == nil || [alarms count] == 0) return env.Null();
+    Napi::Array out = Napi::Array::New(env, [alarms count]);
+    for (NSUInteger i = 0; i < [alarms count]; i++) {
+        out[i] = _alarmToNapi(env, alarms[i]);
+    }
+    return out;
+}
+
+// Build an EKAlarm from a JS object. Caller must pass exactly one of
+// {relativeOffset, absoluteDate}; throws otherwise. Optional fields:
+// type, proximity, emailAddress, soundName, url. structuredLocation
+// not yet writable (deepens with instruction 16).
+static EKAlarm* _jsToEKAlarm(Napi::Env env, Napi::Object source) {
+    bool hasRel = false, hasAbs = false;
+    double relOffset = 0;
+    NSDate* absDate = nil;
+
+    if (source.Has("relativeOffset")) {
+        Napi::Value v = source.Get("relativeOffset");
+        if (v.IsNumber()) {
+            hasRel = true;
+            relOffset = v.As<Napi::Number>().DoubleValue();
+        }
+    }
+    if (source.Has("absoluteDate")) {
+        Napi::Value v = source.Get("absoluteDate");
+        if (v.IsDate()) {
+            hasAbs = true;
+            absDate = [NSDate dateWithTimeIntervalSince1970:v.As<Napi::Date>().ValueOf() / 1000.0];
+        }
+    }
+
+    if (hasRel && hasAbs) {
+        throw Napi::Error::New(env, "EKAlarm requires exactly one of relativeOffset and absoluteDate; both were provided");
+    }
+    if (!hasRel && !hasAbs) {
+        throw Napi::Error::New(env, "EKAlarm requires exactly one of relativeOffset and absoluteDate; neither was provided");
+    }
+
+    EKAlarm* a = hasAbs
+        ? [EKAlarm alarmWithAbsoluteDate:absDate]
+        : [EKAlarm alarmWithRelativeOffset:relOffset];
+
+    if (source.Has("proximity")) {
+        Napi::Value v = source.Get("proximity");
+        if (v.IsString()) {
+            a.proximity = _stringToEKAlarmProximity(env, v.As<Napi::String>().Utf8Value());
+        }
+    }
+
+    if (source.Has("emailAddress")) {
+        Napi::Value v = source.Get("emailAddress");
+        if (v.IsString())    a.emailAddress = @(v.As<Napi::String>().Utf8Value().c_str());
+        else if (v.IsNull()) a.emailAddress = nil;
+    }
+    if (source.Has("soundName")) {
+        Napi::Value v = source.Get("soundName");
+        if (v.IsString())    a.soundName = @(v.As<Napi::String>().Utf8Value().c_str());
+        else if (v.IsNull()) a.soundName = nil;
+    }
+    if (source.Has("url")) {
+        Napi::Value v = source.Get("url");
+        if (v.IsString())    a.url = [NSURL URLWithString:@(v.As<Napi::String>().Utf8Value().c_str())];
+        else if (v.IsNull()) a.url = nil;
+    }
+    // type is read-only on EKAlarm — derived from which fields are set.
+    // structuredLocation: deferred to instruction 16.
+
+    return a;
+}
+
 static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     Napi::Object obj = Napi::Object::New(env);
 
@@ -361,6 +499,7 @@ static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     obj.Set("status",             (int32_t)[ev status]);
 
     obj.Set("recurrenceRules", _recurrenceRulesToNapi(env, [ev recurrenceRules]));
+    obj.Set("alarms",          _alarmsToNapi(env, [ev alarms]));
 
     return obj;
 }
@@ -431,6 +570,8 @@ static Napi::Object _reminderToNapi(Napi::Env env, EKReminder* r) {
 
     _dateComponentsOrNull(obj, "startDateComponents", [r startDateComponents]);
     _dateComponentsOrNull(obj, "dueDateComponents",   [r dueDateComponents]);
+
+    obj.Set("alarms", _alarmsToNapi(env, [r alarms]));
 
     return obj;
 }
@@ -615,6 +756,26 @@ static void _applyJsToEKEvent(Napi::Env env, EKEvent* target, Napi::Object sourc
         }
         // null leaves the rules cleared.
     }
+
+    // Alarms: clear-and-add semantics, mirror of recurrenceRules.
+    if (source.Has("alarms")) {
+        Napi::Value v = source.Get("alarms");
+        NSArray<EKAlarm*>* existing = [target alarms];
+        if (existing != nil) {
+            for (EKAlarm* a in [existing copy]) {
+                [target removeAlarm:a];
+            }
+        }
+        if (v.IsArray()) {
+            Napi::Array arr = v.As<Napi::Array>();
+            for (uint32_t i = 0; i < arr.Length(); i++) {
+                Napi::Value elem = arr[i];
+                if (!elem.IsObject()) continue;
+                EKAlarm* a = _jsToEKAlarm(env, elem.As<Napi::Object>());
+                if (a != nil) [target addAlarm:a];
+            }
+        }
+    }
 }
 
 static void _applyJsToEKReminder(Napi::Env env, EKReminder* target, Napi::Object source) {
@@ -678,6 +839,26 @@ static void _applyJsToEKReminder(Napi::Env env, EKReminder* target, Napi::Object
     // pattern; partial-field reminder updates are rare.
     target.startDateComponents = _jsToDateComponents(source, "startDateComponents");
     target.dueDateComponents   = _jsToDateComponents(source, "dueDateComponents");
+
+    // Alarms: clear-and-add semantics, mirror of the event path.
+    if (source.Has("alarms")) {
+        Napi::Value v = source.Get("alarms");
+        NSArray<EKAlarm*>* existing = [target alarms];
+        if (existing != nil) {
+            for (EKAlarm* a in [existing copy]) {
+                [target removeAlarm:a];
+            }
+        }
+        if (v.IsArray()) {
+            Napi::Array arr = v.As<Napi::Array>();
+            for (uint32_t i = 0; i < arr.Length(); i++) {
+                Napi::Value elem = arr[i];
+                if (!elem.IsObject()) continue;
+                EKAlarm* a = _jsToEKAlarm(env, elem.As<Napi::Object>());
+                if (a != nil) [target addAlarm:a];
+            }
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------

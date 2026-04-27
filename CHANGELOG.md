@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **`EKRecurrenceRule` + `EKRecurrenceEnd` + `EKRecurrenceDayOfWeek`** — full recurring-event support. `EKEvent.recurrenceRules` is now populated on read and recognised by `save(event, span)` for write (clear-and-add semantics). `EKRecurrenceFrequency` (`"daily"` / `"weekly"` / `"monthly"` / `"yearly"`) and `EKWeekday` (`"sunday"` … `"saturday"`) added as const-object enums.
+- **`EKAlarm`** — alarm objects on `EKEvent.alarms` and `EKReminder.alarms`. Construct with exactly one of `relativeOffset` (seconds before/after event start) or `absoluteDate`. `EKAlarmType` (`"display"` / `"audio"` / `"procedure"` / `"email"`) and `EKAlarmProximity` (`"none"` / `"enter"` / `"leave"`) added as const-object enums. `alarm.structuredLocation` shipped as a shallow string proxy (`location.title` only); deepens to the full `EKStructuredLocation` shape when that instruction lands.
 - **`EKError extends Error`** — structured error type for EventKit operations. Carries `.code` (string-named `EKErrorCode`, e.g. `"calendarReadOnly"`, `"noCalendar"`), `.domain`, and `.underlying` (original NSError data). Thrown by `save`, `remove`, `commit`, and the three `request*Access*` methods. `instanceof Error` still passes; `.message` preserved — additive for typical consumers, only callers checking `e.constructor === Error` or string-matching `e.message` are affected.
 - **`EKErrorCode`** — const-object enum with 32 values mirroring Apple's `EKErrorCode` (codes 0–30 plus `"unknown"` for forward-compat with future macOS additions). Numeric mapping in `_fromNative(n)` per `<EventKit/EKError.h>`; verify on macOS at execution time and adjust if Apple has renumbered.
 
 ### Changed
 
 - `event.recurrenceRules` typed as `EKRecurrenceRule[] | null` (was absent from the type entirely).
+- `event.alarms` and `reminder.alarms` typed as `EKAlarm[] | null` (were absent).
 - Native error throws across `saveEvent` / `removeEvent` / `commit` / `saveReminder` / `removeReminder` / access-request paths now carry the structured `code`/`domain`/`underlying` payload via `_napiErrorFromNSError`. The TS wrapper in each public method translates the integer code to the string-named const before re-throwing as `EKError`.
 
 
