@@ -1370,12 +1370,20 @@ static Napi::Value SaveEvent(const Napi::CallbackInfo& info) {
     _applyJsToEKEvent(env, ekEvent, eventObj);
 
     NSError* error = nil;
-    fprintf(stderr, "[eventkit-js] saveEvent: about to call [store saveEvent:span:commit:%d]\n", (int)commitFlag);
+    fprintf(stderr, "[eventkit-js] saveEvent: about to call\n"); fflush(stderr);
     BOOL ok = [store saveEvent:ekEvent span:span commit:commitFlag error:&error];
-    fprintf(stderr, "[eventkit-js] saveEvent: returned ok=%d\n", (int)ok);
+    fprintf(stderr, "[eventkit-js] saveEvent: returned ok=%d\n", (int)ok); fflush(stderr);
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "saveEvent failed");
     }
+
+    // Drain pending CFRunLoop sources on the main run loop. EventKit posts
+    // EKEventStoreChangedNotification via a CFRunLoopSource that requires a
+    // run-loop iteration to fire; libuv doesn't pump Cocoa run loops, so
+    // without this drain the notification queues forever.
+    fprintf(stderr, "[eventkit-js] saveEvent: draining main run loop\n"); fflush(stderr);
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
+    fprintf(stderr, "[eventkit-js] saveEvent: drain done\n"); fflush(stderr);
 
     return Napi::String::New(env, [[ekEvent eventIdentifier] UTF8String]);
 }
@@ -1680,12 +1688,12 @@ static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
                             object:nil
                              queue:changeNotifyQueue
                         usingBlock:^(NSNotification* /*n*/) {
-                fprintf(stderr, "[eventkit-js] EKEventStoreChangedNotification fired\n");
+                fprintf(stderr, "[eventkit-js] EKEventStoreChangedNotification fired\n"); fflush(stderr);
                 std::lock_guard<std::mutex> innerLock(subscriptionsMutex);
-                fprintf(stderr, "[eventkit-js]   subscribers: %zu\n", activeSubscriptions.size());
+                fprintf(stderr, "[eventkit-js]   subscribers: %zu\n", activeSubscriptions.size()); fflush(stderr);
                 for (auto* s : activeSubscriptions) {
                     napi_status r = s->tsfn.NonBlockingCall();
-                    fprintf(stderr, "[eventkit-js]   tsfn.NonBlockingCall = %d\n", (int)r);
+                    fprintf(stderr, "[eventkit-js]   tsfn.NonBlockingCall = %d\n", (int)r); fflush(stderr);
                 }
             }] retain];
         }
