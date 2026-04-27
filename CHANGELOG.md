@@ -23,15 +23,30 @@ Initial public release of this codebase. Pre-2.0 work was internal-only and is n
 - Native layer built on `node-addon-api` for type safety and reduced boilerplate.
 - `os: ["darwin"]` in `package.json`: npm refuses install on Linux and Windows with a clear error.
 
-### Known limitations
+### Roadmap (planned for future minor releases, impact-ordered)
 
-- Apple types `EKAlarm`, `EKRecurrenceRule`, `EKParticipant`, and `EKStructuredLocation` are surfaced as shallow proxies on `EKEvent` (e.g., `event.organizer` is `participant.name` only). Full shapes deferred to a future minor release.
-- `cancelFetchRequest(id)` is superseded by `AbortSignal` and stays `NotImplemented`. Use `fetchReminders(matching, { signal })`.
-- `init(sources)` (filtered EKEventStore) and `delegateSources` are not implemented; no concrete consumer need yet.
-- `calendarItem(withIdentifier)`, `calendarItems(withExternalIdentifier)`, `saveCalendar`, `removeCalendar` deferred to a future minor.
-- Native cancellation of an in-flight `fetchReminders` is not implemented; `AbortSignal` rejects the outer Promise but the inner Apple fetch finishes.
-- `EKCalendar.CGColor` is not surfaced; defer to the calendar-CRUD release.
+1. **`EKRecurrenceRule` / `EKRecurrenceEnd` / `EKRecurrenceDayOfWeek` / `EKRecurrenceFrequency`** — full recurring-event support. `EKEvent.addRecurrenceRule` / `removeRecurrenceRule` / `recurrenceRules` array currently inaccessible. Biggest single gap; calendar apps that don't support recurrence are toys.
+2. **`EKAlarm`** — alarm objects (`absoluteDate`, `relativeOffset`, `proximity`, `structuredLocation`, `emailAddress`, `soundName`, `url`). Plus `EKEvent.addAlarm` / `removeAlarm` / `alarms` array. Required for any notification-driven app.
+3. **`EKEventStoreChangedNotification`** — subscribing to external EventKit DB changes (e.g., Calendar.app modifying an event in another process). Without this, consumers must poll.
+4. **`EKParticipant` / `EKAttendee` full shape** — expand the existing shallow `organizer` proxy. `EKEvent.attendees` array also currently unexposed. Required for shared/team calendars.
+5. **`EKStructuredLocation` full shape** — geographic coordinates, radius. Same pattern as participants; expand the shallow `structuredLocation` proxy.
+6. **`EKErrorCode` / `EKErrorDomain` mapping** — currently `Error(localizedDescription)` only; consumers can't programmatically distinguish "calendar is read-only" from "event not found" from "auth required".
+7. **Calendar CRUD** — `saveCalendar(c, commit)` / `removeCalendar(c, commit)`. Niche; most apps write into existing calendars.
+8. **String-named const enums for `EKEventAvailability` / `EKEventStatus` / `EKParticipantType` / `EKParticipantRole` / `EKParticipantStatus` / `EKRecurrenceFrequency`** — these are exposed as raw Apple integer codes today; consumers see numbers where they'd expect strings.
+
+### Deferred (no near-term consumer need)
+
+- `init(sources)` (filtered `EKEventStore`) and `delegateSources` — single static store covers every typical use case; multi-instance support requires reworking the native bridging model and waits on demand.
+- `cancelFetchRequest(id)` — superseded by `AbortSignal`; stays `NotImplemented`. Use `fetchReminders(matching, { signal })`.
+- `calendarItem(withIdentifier)` / `calendarItems(withExternalIdentifier)` — orphan polymorphic reads (return either an `EKEvent` or `EKReminder`); `event(...)` and `fetchReminders(...)` cover the typed-access paths.
+- `EKCalendar.CGColor` — surfaced as hex `"#RRGGBB"` when calendar CRUD lands.
+- `EKVirtualConferenceProvider` — newer Apple addition for meeting-link generators; niche.
+
+### Behavioural caveats
+
 - `request*Access*` methods are macOS 14+ only; older macOS throws synchronously.
-- Single static `EKEventStore` per process; multi-instance support deferred.
+- Native cancellation of an in-flight `fetchReminders` is not implemented; `AbortSignal` rejects the outer Promise, but the inner Apple fetch keeps running and its result is discarded.
+- Single static `EKEventStore` per process; calling `EKEventStore.init()` twice silently leaks the first.
+- macOS-only via `os: ["darwin"]` whitelist; `npm install` refuses on Linux/Windows.
 
 [2.0.0]: https://github.com/anthdono/eventkit-js/releases/tag/v2.0.0
