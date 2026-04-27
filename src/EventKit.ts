@@ -11,6 +11,15 @@ import { EKReminder } from "./EKReminder";
 import { EKCalendarItem } from "./EKCalendarItem";
 import { NSPredicate } from "./NSPredicate";
 import { NotImplemented } from "./NotImplemented";
+import { EKRecurrenceFrequency } from "./EKRecurrenceFrequency";
+import { EKWeekday } from "./EKWeekday";
+import type {
+    EKRecurrenceRule,
+    EKRecurrenceEnd,
+    EKRecurrenceDayOfWeek,
+} from "./EKRecurrenceRule";
+import { EKError } from "./EKError";
+import { EKErrorCode } from "./EKErrorCode";
 
 export {
     EKEventStore,
@@ -26,4 +35,13 @@ export {
     EKCalendarItem,
     NSPredicate,
     NotImplemented,
+    EKRecurrenceFrequency,
+    EKWeekday,
+    EKError,
+    EKErrorCode,
+};
+export type {
+    EKRecurrenceRule,
+    EKRecurrenceEnd,
+    EKRecurrenceDayOfWeek,
 };

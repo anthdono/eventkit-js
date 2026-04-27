@@ -7,6 +7,7 @@
 //     consts to be added in Phase 6 when a consumer needs them.
 
 import { EKCalendar } from "./EKCalendar";
+import { EKRecurrenceRule } from "./EKRecurrenceRule";
 
 export class EKEvent {
     calendar: EKCalendar;
@@ -32,4 +33,5 @@ export class EKEvent {
     status: number;
     birthdayContactIdentifier: string | null;
     structuredLocation: string | null;
+    recurrenceRules: EKRecurrenceRule[] | null;
 }

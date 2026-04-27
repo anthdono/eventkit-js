@@ -5,6 +5,9 @@
 #include <EventKit/EKCalendar.h>
 #include <EventKit/EKCalendarItem.h>
 #include <EventKit/EKReminder.h>
+#include <EventKit/EKRecurrenceRule.h>
+#include <EventKit/EKRecurrenceEnd.h>
+#include <EventKit/EKRecurrenceDayOfWeek.h>
 #include <Foundation/Foundation.h>
 #include <atomic>
 #import "TestClass.mm"
@@ -14,6 +17,43 @@
 // -----------------------------------------------------------------------------
 
 static EKEventStore* store;
+
+// Convert an NSError (typically EKErrorDomain) into a Napi::Error whose
+// underlying JS Error object carries `.name`, `.message`, `.domain`, a
+// numeric `.code`, and an `.underlying` payload. The TS layer wraps this
+// with EKError and translates the integer code into the string-named
+// EKErrorCode via _wrapNativeError. Foreign-domain errors (e.g.,
+// NSCocoaErrorDomain) get `code = -1`, which TS maps to "unknown"; the
+// real domain/code/message are preserved on `underlying`.
+static Napi::Error _napiErrorFromNSError(Napi::Env env, NSError* error, const char* fallbackMsg) {
+    NSString* domain = error ? [error domain] : nil;
+    NSInteger code = error ? [error code] : 0;
+    NSString* localized = error ? [error localizedDescription] : nil;
+
+    const char* msgCStr = localized ? [localized UTF8String] : fallbackMsg;
+    const char* domainCStr = domain ? [domain UTF8String] : "";
+
+    Napi::Object errObj = Napi::Object::New(env);
+    errObj.Set("name", "EKError");
+    errObj.Set("message", msgCStr);
+    errObj.Set("domain", domainCStr);
+
+    if (domain && [domain isEqualToString:EKErrorDomain]) {
+        // Pass the integer through; TS-side _fromNative maps to a string.
+        errObj.Set("code", (int32_t)code);
+    } else {
+        // Foreign domain. -1 is mapped to "unknown" by EKErrorCode._fromNative.
+        errObj.Set("code", (int32_t)-1);
+    }
+
+    Napi::Object underlying = Napi::Object::New(env);
+    underlying.Set("domain", domainCStr);
+    underlying.Set("code", (int32_t)code);
+    underlying.Set("message", msgCStr);
+    errObj.Set("underlying", underlying);
+
+    return Napi::Error(env, errObj);
+}
 
 static const char* getEKSourceTypeString(EKSourceType source) {
     switch (source) {
@@ -64,6 +104,231 @@ static void _setDateOrNull(Napi::Object obj, const char* key, NSDate* d) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// ------------------------------ Recurrence rules -----------------------------
+// -----------------------------------------------------------------------------
+
+static const char* _ekFrequencyToString(EKRecurrenceFrequency f) {
+    switch (f) {
+        case EKRecurrenceFrequencyDaily:   return "daily";
+        case EKRecurrenceFrequencyWeekly:  return "weekly";
+        case EKRecurrenceFrequencyMonthly: return "monthly";
+        case EKRecurrenceFrequencyYearly:  return "yearly";
+    }
+    return "unknown";
+}
+
+static EKRecurrenceFrequency _stringToEKFrequency(Napi::Env env, const std::string& s) {
+    if (s == "daily")   return EKRecurrenceFrequencyDaily;
+    if (s == "weekly")  return EKRecurrenceFrequencyWeekly;
+    if (s == "monthly") return EKRecurrenceFrequencyMonthly;
+    if (s == "yearly")  return EKRecurrenceFrequencyYearly;
+    throw Napi::Error::New(env, ("Unknown frequency: " + s).c_str());
+}
+
+static const char* _ekWeekdayToString(EKWeekday w) {
+    static const char* names[] = {
+        "sunday", "monday", "tuesday", "wednesday",
+        "thursday", "friday", "saturday"
+    };
+    if (w >= 1 && w <= 7) return names[w - 1];
+    return "unknown";
+}
+
+static EKWeekday _stringToEKWeekday(Napi::Env env, const std::string& s) {
+    if (s == "sunday")    return EKSunday;
+    if (s == "monday")    return EKMonday;
+    if (s == "tuesday")   return EKTuesday;
+    if (s == "wednesday") return EKWednesday;
+    if (s == "thursday")  return EKThursday;
+    if (s == "friday")    return EKFriday;
+    if (s == "saturday")  return EKSaturday;
+    throw Napi::Error::New(env, ("Unknown weekday: " + s).c_str());
+}
+
+// Marshal an `NSArray<NSNumber*>*` (or nil) to a JS array-of-number, or null.
+static Napi::Value _nsNumberArrayToNapi(Napi::Env env, NSArray<NSNumber*>* arr) {
+    if (arr == nil) return env.Null();
+    Napi::Array out = Napi::Array::New(env, [arr count]);
+    for (NSUInteger i = 0; i < [arr count]; i++) {
+        out[i] = Napi::Number::New(env, [arr[i] intValue]);
+    }
+    return out;
+}
+
+// Inverse: read a JS value which is either null/undefined (→ nil) or an
+// array of numbers (→ NSArray<NSNumber*>*).
+static NSArray<NSNumber*>* _napiToNSNumberArray(Napi::Value v) {
+    if (!v.IsArray()) return nil;
+    Napi::Array arr = v.As<Napi::Array>();
+    NSMutableArray<NSNumber*>* m = [NSMutableArray arrayWithCapacity:arr.Length()];
+    for (uint32_t i = 0; i < arr.Length(); i++) {
+        Napi::Value elem = arr[i];
+        if (!elem.IsNumber()) continue;
+        [m addObject:@(elem.As<Napi::Number>().Int32Value())];
+    }
+    return m;
+}
+
+static Napi::Object _recurrenceRuleToNapi(Napi::Env env, EKRecurrenceRule* rule) {
+    Napi::Object obj = Napi::Object::New(env);
+
+    obj.Set("frequency", _ekFrequencyToString([rule frequency]));
+    obj.Set("interval",  (int32_t)[rule interval]);
+
+    // recurrenceEnd: nil → null; endDate set → { endDate: Date };
+    // occurrenceCount > 0 → { occurrenceCount: n }. Apple stores one or the
+    // other in a single `EKRecurrenceEnd` instance.
+    EKRecurrenceEnd* end = [rule recurrenceEnd];
+    if (end == nil) {
+        obj.Set("end", env.Null());
+    } else {
+        Napi::Object endObj = Napi::Object::New(env);
+        NSDate* endDate = [end endDate];
+        if (endDate != nil) {
+            endObj.Set("endDate",
+                Napi::Date::New(env, [endDate timeIntervalSince1970] * 1000.0));
+        } else {
+            endObj.Set("occurrenceCount", (int32_t)[end occurrenceCount]);
+        }
+        obj.Set("end", endObj);
+    }
+
+    // daysOfTheWeek: NSArray<EKRecurrenceDayOfWeek*>* or nil
+    NSArray<EKRecurrenceDayOfWeek*>* dows = [rule daysOfTheWeek];
+    if (dows == nil) {
+        obj.Set("daysOfTheWeek", env.Null());
+    } else {
+        Napi::Array out = Napi::Array::New(env, [dows count]);
+        for (NSUInteger i = 0; i < [dows count]; i++) {
+            EKRecurrenceDayOfWeek* dow = dows[i];
+            Napi::Object o = Napi::Object::New(env);
+            o.Set("dayOfTheWeek", _ekWeekdayToString([dow dayOfTheWeek]));
+            o.Set("weekNumber",   (int32_t)[dow weekNumber]);
+            out[i] = o;
+        }
+        obj.Set("daysOfTheWeek", out);
+    }
+
+    obj.Set("daysOfTheMonth",  _nsNumberArrayToNapi(env, [rule daysOfTheMonth]));
+    obj.Set("monthsOfTheYear", _nsNumberArrayToNapi(env, [rule monthsOfTheYear]));
+    obj.Set("weeksOfTheYear",  _nsNumberArrayToNapi(env, [rule weeksOfTheYear]));
+    obj.Set("daysOfTheYear",   _nsNumberArrayToNapi(env, [rule daysOfTheYear]));
+    obj.Set("setPositions",    _nsNumberArrayToNapi(env, [rule setPositions]));
+
+    return obj;
+}
+
+static Napi::Value _recurrenceRulesToNapi(Napi::Env env, NSArray<EKRecurrenceRule*>* rules) {
+    if (rules == nil || [rules count] == 0) return env.Null();
+    Napi::Array out = Napi::Array::New(env, [rules count]);
+    for (NSUInteger i = 0; i < [rules count]; i++) {
+        out[i] = _recurrenceRuleToNapi(env, rules[i]);
+    }
+    return out;
+}
+
+// Build an `EKRecurrenceRule` from a JS object matching the TS shape.
+// Uses the long-form initialiser unconditionally — passing nil for
+// unused arrays is simpler than branching to the short
+// `initRecurrenceWithFrequency:interval:end:` variant.
+static EKRecurrenceRule* _jsToEKRecurrenceRule(Napi::Env env, Napi::Object source) {
+    if (!source.Has("frequency")) {
+        throw Napi::Error::New(env, "EKRecurrenceRule requires a frequency");
+    }
+    Napi::Value freqV = source.Get("frequency");
+    if (!freqV.IsString()) {
+        throw Napi::Error::New(env, "EKRecurrenceRule.frequency must be a string");
+    }
+    EKRecurrenceFrequency frequency =
+        _stringToEKFrequency(env, freqV.As<Napi::String>().Utf8Value());
+
+    NSInteger interval = 1;
+    if (source.Has("interval")) {
+        Napi::Value v = source.Get("interval");
+        if (v.IsNumber()) interval = v.As<Napi::Number>().Int32Value();
+    }
+    if (interval < 1) {
+        throw Napi::Error::New(env, "EKRecurrenceRule.interval must be >= 1");
+    }
+
+    // daysOfTheWeek: array of { dayOfTheWeek: string, weekNumber: number }
+    NSArray<EKRecurrenceDayOfWeek*>* daysOfTheWeek = nil;
+    if (source.Has("daysOfTheWeek")) {
+        Napi::Value v = source.Get("daysOfTheWeek");
+        if (v.IsArray()) {
+            Napi::Array arr = v.As<Napi::Array>();
+            NSMutableArray<EKRecurrenceDayOfWeek*>* m =
+                [NSMutableArray arrayWithCapacity:arr.Length()];
+            for (uint32_t i = 0; i < arr.Length(); i++) {
+                Napi::Value elem = arr[i];
+                if (!elem.IsObject()) continue;
+                Napi::Object o = elem.As<Napi::Object>();
+                if (!o.Has("dayOfTheWeek")) continue;
+                Napi::Value dowV = o.Get("dayOfTheWeek");
+                if (!dowV.IsString()) continue;
+                EKWeekday wd = _stringToEKWeekday(env,
+                    dowV.As<Napi::String>().Utf8Value());
+                NSInteger weekNumber = 0;
+                if (o.Has("weekNumber")) {
+                    Napi::Value wnV = o.Get("weekNumber");
+                    if (wnV.IsNumber()) weekNumber = wnV.As<Napi::Number>().Int32Value();
+                }
+                EKRecurrenceDayOfWeek* dow =
+                    [EKRecurrenceDayOfWeek dayOfWeek:wd weekNumber:weekNumber];
+                if (dow != nil) [m addObject:dow];
+            }
+            if ([m count] > 0) daysOfTheWeek = m;
+        }
+    }
+
+    NSArray<NSNumber*>* daysOfTheMonth  = source.Has("daysOfTheMonth")
+        ? _napiToNSNumberArray(source.Get("daysOfTheMonth")) : nil;
+    NSArray<NSNumber*>* monthsOfTheYear = source.Has("monthsOfTheYear")
+        ? _napiToNSNumberArray(source.Get("monthsOfTheYear")) : nil;
+    NSArray<NSNumber*>* weeksOfTheYear  = source.Has("weeksOfTheYear")
+        ? _napiToNSNumberArray(source.Get("weeksOfTheYear")) : nil;
+    NSArray<NSNumber*>* daysOfTheYear   = source.Has("daysOfTheYear")
+        ? _napiToNSNumberArray(source.Get("daysOfTheYear")) : nil;
+    NSArray<NSNumber*>* setPositions    = source.Has("setPositions")
+        ? _napiToNSNumberArray(source.Get("setPositions")) : nil;
+
+    // recurrenceEnd: nil | { occurrenceCount } | { endDate }
+    EKRecurrenceEnd* end = nil;
+    if (source.Has("end")) {
+        Napi::Value v = source.Get("end");
+        if (v.IsObject() && !v.IsNull()) {
+            Napi::Object endObj = v.As<Napi::Object>();
+            if (endObj.Has("endDate")) {
+                Napi::Value d = endObj.Get("endDate");
+                if (d.IsDate()) {
+                    NSDate* date = [NSDate dateWithTimeIntervalSince1970:
+                        d.As<Napi::Date>().ValueOf() / 1000.0];
+                    end = [EKRecurrenceEnd recurrenceEndWithEndDate:date];
+                }
+            } else if (endObj.Has("occurrenceCount")) {
+                Napi::Value c = endObj.Get("occurrenceCount");
+                if (c.IsNumber()) {
+                    end = [EKRecurrenceEnd recurrenceEndWithOccurrenceCount:
+                        c.As<Napi::Number>().Int32Value()];
+                }
+            }
+        }
+    }
+
+    EKRecurrenceRule* rule = [[EKRecurrenceRule alloc]
+        initRecurrenceWithFrequency:frequency
+                           interval:interval
+                      daysOfTheWeek:daysOfTheWeek
+                     daysOfTheMonth:daysOfTheMonth
+                    monthsOfTheYear:monthsOfTheYear
+                     weeksOfTheYear:weeksOfTheYear
+                      daysOfTheYear:daysOfTheYear
+                       setPositions:setPositions
+                                end:end];
+    return [rule autorelease];
+}
+
 static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     Napi::Object obj = Napi::Object::New(env);
 
@@ -94,6 +359,8 @@ static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
 
     obj.Set("availability",       (int32_t)[ev availability]);
     obj.Set("status",             (int32_t)[ev status]);
+
+    obj.Set("recurrenceRules", _recurrenceRulesToNapi(env, [ev recurrenceRules]));
 
     return obj;
 }
@@ -223,12 +490,16 @@ static Napi::Value _runAccessRequest(
     );
 
     invokeRequest(^(BOOL granted, NSError* error) {
-        NSString* errMsg = error ? [error localizedDescription] : nil;
-        std::string msg = errMsg ? [errMsg UTF8String] : std::string();
+        // Capture the NSError onto the heap so the V8-thread lambda can
+        // build a structured EKError from it. Retained here, released on
+        // the V8 thread after _napiErrorFromNSError reads it.
+        NSError* capturedError = error ? [error retain] : nil;
 
-        tsfn.BlockingCall([ctx, granted, msg](Napi::Env env, Napi::Function) {
-            if (!msg.empty()) {
-                ctx->deferred.Reject(Napi::Error::New(env, msg).Value());
+        tsfn.BlockingCall([ctx, granted, capturedError](Napi::Env env, Napi::Function) {
+            if (capturedError != nil) {
+                Napi::Error err = _napiErrorFromNSError(env, capturedError, "access request failed");
+                ctx->deferred.Reject(err.Value());
+                [capturedError release];
             } else {
                 ctx->deferred.Resolve(Napi::Boolean::New(env, (bool)granted));
             }
@@ -317,6 +588,32 @@ static void _applyJsToEKEvent(Napi::Env env, EKEvent* target, Napi::Object sourc
         if (v.IsNumber()) {
             target.availability = (EKEventAvailability)v.As<Napi::Number>().Int32Value();
         }
+    }
+
+    // Recurrence rules: clear-and-add semantics. Apple has no setter for
+    // `recurrenceRules`; mutation is via `addRecurrenceRule:` /
+    // `removeRecurrenceRule:`. When the JS object has the key, we replace
+    // wholesale (read-modify-write is the typical pattern). undefined →
+    // leave existing rules; null → clear all; array → clear, then add.
+    if (source.Has("recurrenceRules")) {
+        Napi::Value v = source.Get("recurrenceRules");
+        NSArray<EKRecurrenceRule*>* existing = [target recurrenceRules];
+        if (existing != nil) {
+            // Snapshot first; -removeRecurrenceRule: mutates the array we're iterating.
+            for (EKRecurrenceRule* r in [existing copy]) {
+                [target removeRecurrenceRule:r];
+            }
+        }
+        if (v.IsArray()) {
+            Napi::Array arr = v.As<Napi::Array>();
+            for (uint32_t i = 0; i < arr.Length(); i++) {
+                Napi::Value elem = arr[i];
+                if (!elem.IsObject()) continue;
+                EKRecurrenceRule* r = _jsToEKRecurrenceRule(env, elem.As<Napi::Object>());
+                if (r != nil) [target addRecurrenceRule:r];
+            }
+        }
+        // null leaves the rules cleared.
     }
 }
 
@@ -627,8 +924,7 @@ static Napi::Value SaveEvent(const Napi::CallbackInfo& info) {
     NSError* error = nil;
     BOOL ok = [store saveEvent:ekEvent span:span commit:commitFlag error:&error];
     if (!ok) {
-        const char* msg = error ? [[error localizedDescription] UTF8String] : "saveEvent failed";
-        throw Napi::Error::New(env, msg);
+        throw _napiErrorFromNSError(env, error, "saveEvent failed");
     }
 
     return Napi::String::New(env, [[ekEvent eventIdentifier] UTF8String]);
@@ -653,8 +949,7 @@ static Napi::Value RemoveEvent(const Napi::CallbackInfo& info) {
     NSError* error = nil;
     BOOL ok = [store removeEvent:ekEvent span:span commit:commitFlag error:&error];
     if (!ok) {
-        const char* msg = error ? [[error localizedDescription] UTF8String] : "removeEvent failed";
-        throw Napi::Error::New(env, msg);
+        throw _napiErrorFromNSError(env, error, "removeEvent failed");
     }
     return env.Undefined();
 }
@@ -664,8 +959,7 @@ static Napi::Value Commit(const Napi::CallbackInfo& info) {
     NSError* error = nil;
     BOOL ok = [store commit:&error];
     if (!ok) {
-        const char* msg = error ? [[error localizedDescription] UTF8String] : "commit failed";
-        throw Napi::Error::New(env, msg);
+        throw _napiErrorFromNSError(env, error, "commit failed");
     }
     return env.Undefined();
 }
@@ -781,8 +1075,7 @@ static Napi::Value SaveReminder(const Napi::CallbackInfo& info) {
     NSError* error = nil;
     BOOL ok = [store saveReminder:ekReminder commit:commitFlag error:&error];
     if (!ok) {
-        const char* msg = error ? [[error localizedDescription] UTF8String] : "saveReminder failed";
-        throw Napi::Error::New(env, msg);
+        throw _napiErrorFromNSError(env, error, "saveReminder failed");
     }
     return Napi::String::New(env, [[ekReminder calendarItemIdentifier] UTF8String]);
 }
@@ -805,8 +1098,7 @@ static Napi::Value RemoveReminder(const Napi::CallbackInfo& info) {
     NSError* error = nil;
     BOOL ok = [store removeReminder:ekReminder commit:commitFlag error:&error];
     if (!ok) {
-        const char* msg = error ? [[error localizedDescription] UTF8String] : "removeReminder failed";
-        throw Napi::Error::New(env, msg);
+        throw _napiErrorFromNSError(env, error, "removeReminder failed");
     }
     return env.Undefined();
 }

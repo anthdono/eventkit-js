@@ -10,6 +10,7 @@ import { EKEvent } from "./EKEvent";
 import { EKCalendarItem } from "./EKCalendarItem";
 import { EKReminder } from "./EKReminder";
 import { NSPredicate } from "./NSPredicate";
+import { _wrapNativeError } from "./EKError";
 
 const addon = require("../build/Release/addon");
 
@@ -32,15 +33,15 @@ export class EKEventStore {
     }
 
     public requestWriteOnlyAccessToEvents(): Promise<boolean> {
-        return addon.requestWriteOnlyAccessToEvents();
+        return addon.requestWriteOnlyAccessToEvents().catch((e: any) => { throw _wrapNativeError(e); });
     }
 
     public requestFullAccessToEvents(): Promise<boolean> {
-        return addon.requestFullAccessToEvents();
+        return addon.requestFullAccessToEvents().catch((e: any) => { throw _wrapNativeError(e); });
     }
 
     public requestFullAccessToReminders(): Promise<boolean> {
-        return addon.requestFullAccessToReminders();
+        return addon.requestFullAccessToReminders().catch((e: any) => { throw _wrapNativeError(e); });
     }
 
     public authorizationStatus(forEntityType: EKEntityType): EKAuthorizationStatus {
@@ -58,9 +59,10 @@ export class EKEventStore {
         return addon.source(withIdentifier);
     }
 
-    // throws error
+    // throws EKError on commit failure
     public commit(): void {
-        addon.commit();
+        try { addon.commit(); }
+        catch (e) { throw _wrapNativeError(e); }
     }
 
     public reset(): void {
@@ -108,25 +110,29 @@ export class EKEventStore {
     public save(event: EKEvent, span: EKSpan, commit?: boolean): void;
     public save(reminder: EKReminder, commit: boolean): void;
     public save(item: EKEvent | EKReminder, spanOrCommit: EKSpan | boolean, commit?: boolean): void {
-        if (typeof spanOrCommit === "boolean") {
-            // save(reminder, commit)
-            addon.saveReminder(item, spanOrCommit);
-            return;
-        }
-        const doCommit = commit ?? true;
-        addon.saveEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
+        try {
+            if (typeof spanOrCommit === "boolean") {
+                // save(reminder, commit)
+                addon.saveReminder(item, spanOrCommit);
+                return;
+            }
+            const doCommit = commit ?? true;
+            addon.saveEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
+        } catch (e) { throw _wrapNativeError(e); }
     }
 
     public remove(event: EKEvent, span: EKSpan, commit?: boolean): void;
     public remove(reminder: EKReminder, commit: boolean): void;
     public remove(item: EKEvent | EKReminder, spanOrCommit: EKSpan | boolean, commit?: boolean): void {
-        if (typeof spanOrCommit === "boolean") {
-            // remove(reminder, commit)
-            addon.removeReminder(item, spanOrCommit);
-            return;
-        }
-        const doCommit = commit ?? true;
-        addon.removeEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
+        try {
+            if (typeof spanOrCommit === "boolean") {
+                // remove(reminder, commit)
+                addon.removeReminder(item, spanOrCommit);
+                return;
+            }
+            const doCommit = commit ?? true;
+            addon.removeEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
+        } catch (e) { throw _wrapNativeError(e); }
     }
 
     public enumerateEvents(

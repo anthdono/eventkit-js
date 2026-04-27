@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] — 2026-04-27
+## [Unreleased]
+
+### Added
+
+- **`EKRecurrenceRule` + `EKRecurrenceEnd` + `EKRecurrenceDayOfWeek`** — full recurring-event support. `EKEvent.recurrenceRules` is now populated on read and recognised by `save(event, span)` for write (clear-and-add semantics). `EKRecurrenceFrequency` (`"daily"` / `"weekly"` / `"monthly"` / `"yearly"`) and `EKWeekday` (`"sunday"` … `"saturday"`) added as const-object enums.
+- **`EKError extends Error`** — structured error type for EventKit operations. Carries `.code` (string-named `EKErrorCode`, e.g. `"calendarReadOnly"`, `"noCalendar"`), `.domain`, and `.underlying` (original NSError data). Thrown by `save`, `remove`, `commit`, and the three `request*Access*` methods. `instanceof Error` still passes; `.message` preserved — additive for typical consumers, only callers checking `e.constructor === Error` or string-matching `e.message` are affected.
+- **`EKErrorCode`** — const-object enum with 32 values mirroring Apple's `EKErrorCode` (codes 0–30 plus `"unknown"` for forward-compat with future macOS additions). Numeric mapping in `_fromNative(n)` per `<EventKit/EKError.h>`; verify on macOS at execution time and adjust if Apple has renumbered.
+
+### Changed
+
+- `event.recurrenceRules` typed as `EKRecurrenceRule[] | null` (was absent from the type entirely).
+- Native error throws across `saveEvent` / `removeEvent` / `commit` / `saveReminder` / `removeReminder` / access-request paths now carry the structured `code`/`domain`/`underlying` payload via `_napiErrorFromNSError`. The TS wrapper in each public method translates the integer code to the string-named const before re-throwing as `EKError`.
+
+
 
 Initial public release of this codebase. Pre-2.0 work was internal-only and is not part of this version history.
 

@@ -90,6 +90,7 @@ Declared in `src/EKEvent.ts`. Populated by `_eventToNapi` in the native layer.
 | `status` | `number` | ✅ | raw Apple enum code; string consts deferred to Phase 6 |
 | `birthdayContactIdentifier` | `string \| null` | ✅ | |
 | `structuredLocation` | `string \| null` | ✅ | shallow proxy: `location.title`; full `EKStructuredLocation` deferred to Phase 6 |
+| `recurrenceRules` | `EKRecurrenceRule[] \| null` | ✅ | full marshal via `_recurrenceRulesToNapi`; clear-and-add on save |
 
 ---
 
@@ -166,6 +167,44 @@ Declared in `src/NSPredicate.ts`. Empty shell — opaque native-handle class wir
 
 ---
 
+## EKRecurrenceRule
+
+Declared in `src/EKRecurrenceRule.ts` (interface, not class — recurrence rules are pure data). Read via `EKEvent.recurrenceRules`; written by setting that field and calling `store.save(event, span)` (clear-and-add semantics — the existing rules are replaced wholesale when the JS object includes the key).
+
+| Property | Type | Notes |
+|---|---|---|
+| `frequency` | `EKRecurrenceFrequency` | `"daily" \| "weekly" \| "monthly" \| "yearly"` |
+| `interval` | `number` | `1` = "every", `2` = "every other", … |
+| `end` | `EKRecurrenceEnd` | discriminated union: `{ occurrenceCount }` \| `{ endDate }` \| `null` |
+| `daysOfTheWeek` | `EKRecurrenceDayOfWeek[] \| null` | each: `{ dayOfTheWeek, weekNumber }` where `weekNumber` is `0` (any) or `±N` (Nth occurrence / from end) |
+| `daysOfTheMonth` | `number[] \| null` | `1..31`, `-1..-31` |
+| `monthsOfTheYear` | `number[] \| null` | `1..12` |
+| `weeksOfTheYear` | `number[] \| null` | `1..53`, `-1..-53` |
+| `daysOfTheYear` | `number[] \| null` | `1..366`, `-1..-366` |
+| `setPositions` | `number[] \| null` | `1..366`, `-1..-366` |
+
+Native helpers: `_recurrenceRuleToNapi` (read), `_jsToEKRecurrenceRule` (write — uses Apple's long-form `initRecurrenceWithFrequency:interval:daysOfTheWeek:daysOfTheMonth:monthsOfTheYear:weeksOfTheYear:daysOfTheYear:setPositions:end:` initialiser unconditionally).
+
+---
+
+## EKError
+
+Declared in `src/EKError.ts`. Subclasses `Error`; thrown by `save` / `remove` / `commit` / `request*Access*` whenever Apple's API returns an `NSError`. `instanceof Error` still passes — additive for typical consumers.
+
+| Property | Type | Notes |
+|---|---|---|
+| `name` | `"EKError"` | distinguishable from generic `Error` |
+| `message` | `string` | mirrors `[error localizedDescription]` |
+| `code` | `EKErrorCode` | string-named const; e.g. `"calendarReadOnly"`, `"noCalendar"` |
+| `domain` | `string` | typically `"EKErrorDomain"`; foreign domains pass through |
+| `underlying?` | `{ domain, code: number, message }` | original numeric code + domain for debugging |
+
+Maps Apple's `EKErrorCode` integers to string names per `_fromNative` in `src/EKErrorCode.ts`. Codes 0–30 covered as of 2026-04-27; unknown integers map to `"unknown"` (for forward-compat with future macOS additions).
+
+Consumers catching specifically: `try { ... } catch (e) { if (e instanceof EKError && e.code === "calendarReadOnly") { ... } }`. The TS wrapper `_wrapNativeError` (in `src/EKError.ts`) is what translates the numeric `code` field set by the native layer into the string-named const.
+
+---
+
 ## EKCalendarItem
 
 Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) and a large block of commented-out Obj-C header text as a design reference. Tracked as tech debt; scheduled for cleanup (or conversion) when the first calendar-item field beyond `calendar` lands.
@@ -181,6 +220,9 @@ Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) a
 | `EKSpan` | `src/EKSpan.ts` | const object + `typeof` | `"thisEvent"`, `"futureEvents"` |
 | `EKAuthorizationStatus` | `src/EKAuthorizationStatus.ts` | const object + `typeof` | `"fullAccess"`, `"writeOnly"`, `"denied"`, `"notDetermined"`, `"restricted"` |
 | `EKCalendarType` | `src/EKCalendarType.ts` | const object + `typeof` | `"Local"`, `"CalDAV"`, `"Exchange"`, `"Subscription"`, `"Birthday"` |
+| `EKRecurrenceFrequency` | `src/EKRecurrenceFrequency.ts` | const object + `typeof` | `"daily"`, `"weekly"`, `"monthly"`, `"yearly"` |
+| `EKWeekday` | `src/EKWeekday.ts` | const object + `typeof` | `"sunday"` … `"saturday"` (Apple raw 1..7) |
+| `EKErrorCode` | `src/EKErrorCode.ts` | const object + `typeof` | 32 values, e.g. `"eventNotMutable"`, `"calendarReadOnly"`, `"unknown"` (catch-all for forward-compat) |
 | `DateComponents` | `src/EKReminder.ts` | **interface** (not const-object) | shape: `{ year, month, day, hour, minute, second }`, each `number \| null` |
 
 Convention: const-object-with-string-values + `typeof` alias, so the runtime values are JSON-friendly strings and string-equality checks work across the napi boundary.
