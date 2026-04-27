@@ -1,6 +1,6 @@
 # EventKit Coverage
 
-Last updated: 2026-04-24. Per-member implementation status for the TypeScript surface. Source-of-truth status board lives in [[../vault/Tracking]]; this file is the drill-down.
+Last updated: 2026-04-27. Per-member implementation status for the TypeScript surface.
 
 Legend: ✅ implemented • 🟡 stub (`throw new NotImplemented`) • ❌ not yet declared in TS • 🟥 broken (has known runtime bug, not yet fixed)
 
@@ -15,7 +15,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | Member | Status | Owning instruction |
 |---|---|---|
 | `init()` | ✅ | — |
-| `init(sources: EKSource[])` | 🟡 | [[../vault/planning/Native Bridging Model]] |
+| `init(sources: EKSource[])` | 🟡 | deferred — multi-store support not on near-term roadmap |
 | `authorizationStatus(forEntityType)` | ✅ | — |
 
 ### Instance methods
@@ -41,7 +41,7 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `enumerateEvents(matching, block): Promise<void>` | ✅ | — |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
 | `fetchReminders(matching, options?): Promise<EKReminder[]>` | ✅ | — |
-| `cancelFetchRequest(id)` | 🟡 | superseded by `AbortSignal` per [[../vault/planning/Async & Completion Handlers]]; stays `NotImplemented` |
+| `cancelFetchRequest(id)` | 🟡 | superseded by `AbortSignal`; pass `{ signal }` to `fetchReminders` instead. Stays `NotImplemented`. |
 | `predicateForEvents(start, end, calendars)` | ✅ | — |
 | `predicateForReminders(inCalendars)` | ✅ | — |
 | `predicateForCompletedReminders(start, end, calendars)` | ✅ | — |
@@ -168,7 +168,7 @@ Declared in `src/NSPredicate.ts`. Empty shell — opaque native-handle class wir
 
 ## EKCalendarItem
 
-Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) and a large block of commented-out Obj-C header text as a design reference. The header reference is tracked as tech debt in [[../vault/Tracking]] and is scheduled for cleanup (or conversion) in Phase 5 (reminders), when the first calendar-item field beyond `calendar` lands.
+Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) and a large block of commented-out Obj-C header text as a design reference. Tracked as tech debt; scheduled for cleanup (or conversion) when the first calendar-item field beyond `calendar` lands.
 
 ---
 
@@ -183,7 +183,7 @@ Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) a
 | `EKCalendarType` | `src/EKCalendarType.ts` | const object + `typeof` | `"Local"`, `"CalDAV"`, `"Exchange"`, `"Subscription"`, `"Birthday"` |
 | `DateComponents` | `src/EKReminder.ts` | **interface** (not const-object) | shape: `{ year, month, day, hour, minute, second }`, each `number \| null` |
 
-Convention rationale: see [[../vault/planning/TypeScript API Conventions]].
+Convention: const-object-with-string-values + `typeof` alias, so the runtime values are JSON-friendly strings and string-equality checks work across the napi boundary.
 
 ---
 
@@ -195,4 +195,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **7** as of 2026-04-27 (down from 13 after Phase 5 in [[../vault/instructions/11 - Reminders]]; the residual seven include `init(sources)`, `delegateSources`, `cancelFetchRequest` (intentionally NotImplemented per the AbortSignal supersession), `calendarItem`, `calendarItems`, `saveCalendar`, `removeCalendar`).
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **7** as of 2026-04-27. The residual seven: `init(sources)`, `delegateSources`, `cancelFetchRequest` (intentionally `NotImplemented` per the `AbortSignal` supersession), `calendarItem`, `calendarItems`, `saveCalendar`, `removeCalendar`.

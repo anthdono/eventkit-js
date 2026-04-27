@@ -373,9 +373,12 @@ static void _applyJsToEKReminder(Napi::Env env, EKReminder* target, Napi::Object
         else if (v.IsNull()) target.completionDate = nil;
     }
 
-    // Date-components fields: unconditional overwrite (deviates from
-    // the undefined→leave-unchanged convention used above; documented
-    // in vault/instructions/11 - Reminders.md Step 4).
+    // Date-components fields: unconditional overwrite. Deviates from the
+    // undefined→leave-unchanged convention used above because
+    // _jsToDateComponents returning nil is indistinguishable between
+    // "absent on JS object" and "explicit null"; tri-stating wasn't worth
+    // the helper-shape boilerplate. Read-modify-write is the typical
+    // pattern; partial-field reminder updates are rare.
     target.startDateComponents = _jsToDateComponents(source, "startDateComponents");
     target.dueDateComponents   = _jsToDateComponents(source, "dueDateComponents");
 }

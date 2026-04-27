@@ -2,7 +2,7 @@
 
 Node-API wrapper for Apple's [EventKit](https://developer.apple.com/documentation/eventkit) framework — read and write Calendar events and Reminders from Node.js on macOS.
 
-Phases 0–5 (calendars, events read/write/streaming, reminders) are complete. Phase 6 — alarms, recurrence rules, participants, structured location, calendar CRUD, change notifications — is on the roadmap; see [`vault/Tracking.md`](./vault/Tracking.md).
+Phases 0–5 (calendars, events read/write/streaming, reminders) are complete. Phase 6 — alarms, recurrence rules, participants, structured location, calendar CRUD, change notifications — is on the roadmap; see "Known limitations" in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Installation
 
@@ -74,7 +74,7 @@ try {
 }
 ```
 
-The signal aborts the outer Promise. The native fetch keeps running and its result is discarded. Real native cancellation is deferred — see [`vault/planning/Async & Completion Handlers.md`](./vault/planning/Async%20%26%20Completion%20Handlers.md).
+The signal aborts the outer Promise. The native fetch keeps running and its result is discarded. Real native cancellation is deferred — see "Known limitations" in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Streaming events
 
@@ -95,10 +95,6 @@ try {
 ## API reference
 
 Per-method status, signatures, and shape: [`docs/coverage.md`](./docs/coverage.md).
-
-## Development & design
-
-Project history, decisions, and roadmap: [`vault/Tracking.md`](./vault/Tracking.md). Each instruction in [`vault/instructions/`](./vault/instructions/) carries its own spec + Deployed-state record. Architecture and design tradeoffs: [`vault/planning/`](./vault/planning/).
 
 ## Versioning
 
