@@ -40,16 +40,16 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `calendarItems(withExternalIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
 | `enumerateEvents(matching, block): Promise<void>` | ✅ | — |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
-| `fetchReminders(matching): Promise<EKReminder[]>` | 🟡 | Phase 5 (reminders) |
-| `cancelFetchRequest(id)` | 🟡 | Phase 5 (reminders) |
+| `fetchReminders(matching, options?): Promise<EKReminder[]>` | 🟡 | [[../vault/instructions/11 - Reminders]] |
+| `cancelFetchRequest(id)` | 🟡 | superseded by `AbortSignal` per [[../vault/planning/Async & Completion Handlers]]; stays `NotImplemented` |
 | `predicateForEvents(start, end, calendars)` | ✅ | — |
-| `predicateForReminders(inCalendars)` | 🟡 | Phase 5 (reminders) |
-| `predicateForCompletedReminders(start, end, calendars)` | 🟡 | Phase 5 (reminders) |
-| `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | Phase 5 (reminders) |
+| `predicateForReminders(inCalendars)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
+| `predicateForCompletedReminders(start, end, calendars)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
+| `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
 | `save(event, span[, commit])` | ✅ | — |
-| `save(reminder, commit)` | 🟡 | Phase 5 (reminders) — overload declared, body throws `NotImplemented` |
+| `save(reminder, commit)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
 | `remove(event, span[, commit])` | ✅ | — |
-| `remove(reminder, commit)` | 🟡 | Phase 5 (reminders) — overload declared, body throws `NotImplemented` |
+| `remove(reminder, commit)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
 
 ### Getters
 
