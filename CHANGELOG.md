@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Continuous integration via GitHub Actions on `macos-latest` (Node 20, 22). Workflow at `.github/workflows/ci.yml` runs `npm ci` (rebuilds the native addon) + `npm run build:ts` + `npm test` on every push to `development` and every pull request. CI badge added to the readme. Manual-only tests stay skipped (the runner has no Calendar.app database and no `TEST_CALENDAR_ID` secret).
+- [`docs/migration-2-to-3.md`](./docs/migration-2-to-3.md) — migration guide covering the four breaking changes from 3.0.0 (string `availability` / `status`, expanded `organizer`, expanded `structuredLocation`, structured `EKError`).
+- README quickstart sections for recurrence, alarms, change notifications, calendar CRUD, and structured errors.
 
 ## [3.0.1] — 2026-04-27
 

@@ -16,6 +16,8 @@ npm install eventkit-js
 
 macOS-only. The `os` field in `package.json` blocks install on Linux and Windows. Build requires Xcode Command Line Tools and a C++17-capable clang (defaults on macOS 14+).
 
+> **Upgrading from 2.x?** See [Migration: 2.x → 3.x](./docs/migration-2-to-3.md).
+
 ## Permissions and `Info.plist`
 
 On macOS 14+ the `request*Access*` methods only show the system consent dialog if the host app's bundle includes the relevant usage-description keys:
@@ -95,6 +97,103 @@ try {
     if (e !== STOP) throw e;
 }
 ```
+
+## Recurrence
+
+`EKEvent.recurrenceRules` is populated on read and recognised on write. Save semantics are clear-and-add — the array you pass replaces the event's recurrence entirely.
+
+```ts
+import { EKRecurrenceFrequency, EKWeekday, EKSpan } from "eventkit-js";
+
+event.recurrenceRules = [
+    {
+        frequency: EKRecurrenceFrequency.WEEKLY,
+        interval: 1,
+        end: { occurrenceCount: 10 },           // or { endDate: new Date(...) } or null
+        daysOfTheWeek: [
+            { dayOfTheWeek: EKWeekday.MONDAY,    weekNumber: 0 },
+            { dayOfTheWeek: EKWeekday.WEDNESDAY, weekNumber: 0 },
+        ],
+        daysOfTheMonth:  null,
+        monthsOfTheYear: null,
+        weeksOfTheYear:  null,
+        daysOfTheYear:   null,
+        setPositions:    null,
+    },
+];
+store.save(event, EKSpan.FUTURE_EVENTS);
+```
+
+## Alarms
+
+`EKEvent.alarms` and `EKReminder.alarms` are populated on read and recognised on write. Construct as plain objects — exactly one of `relativeOffset` and `absoluteDate` must be set:
+
+```ts
+import { EKAlarmType, EKAlarmProximity, EKSpan } from "eventkit-js";
+
+event.alarms = [
+    {
+        relativeOffset: -15 * 60,                       // 15 minutes before start
+        absoluteDate:   null,
+        type:           EKAlarmType.DISPLAY,
+        proximity:      EKAlarmProximity.NONE,
+        structuredLocation: null,
+        emailAddress:   null,
+        soundName:      null,
+    },
+];
+store.save(event, EKSpan.THIS_EVENT);
+```
+
+## Change notifications
+
+`EKEventStore` extends Node's `EventEmitter`. The first `on("change", …)` registers a native `EKEventStoreChangedNotification` observer; the last `off`/`removeAllListeners` tears it down. No payload is delivered — refetch on receipt.
+
+```ts
+const onChange = () => { /* refetch */ };
+store.on("change", onChange);
+// ...
+store.off("change", onChange);
+```
+
+## Calendar CRUD
+
+```ts
+import { EKEntityType } from "eventkit-js";
+
+const local = store.sources.find(s => s.sourceType === "local")!;
+const cal = {
+    title: "Project Phoenix",
+    color: "#FF7E00",                                       // null clears
+    sourceIdentifier: local.sourceIdentifier,
+    allowedEntityTypes: [EKEntityType.EVENT],
+};
+store.saveCalendar(cal as any, true);
+// later:
+store.removeCalendar(cal as any, true);
+```
+
+`EKCalendar.color` is `string | null` (hex `"#RRGGBB"`); `EKCalendar.allowedEntityTypes` is a non-empty array. The first element of `allowedEntityTypes` picks the entity type for Apple's `calendarForEntityType:eventStore:` constructor.
+
+## Structured errors
+
+Every `save` / `remove` / `commit` / `saveCalendar` / `removeCalendar` rejects with an `EKError` carrying Apple's error code as a string.
+
+```ts
+import { EKError, EKErrorCode, EKSpan } from "eventkit-js";
+
+try {
+    store.save(event, EKSpan.THIS_EVENT);
+} catch (e) {
+    if (e instanceof EKError && e.code === EKErrorCode.CALENDAR_READ_ONLY) {
+        // pick a different calendar
+    } else {
+        throw e;
+    }
+}
+```
+
+`EKErrorCode` covers all 32 documented Apple codes. `instanceof Error` still passes; `.message` preserves Apple's localised string. Compare `.code` against the const-object enum — don't string-match `.message`.
 
 ## API reference
 
