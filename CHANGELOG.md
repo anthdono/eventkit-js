@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-04-27
+
+Phase 7 batch — operationalisation and developer-experience polish on top of 3.0.1. CI on macOS, full migration guide and README quickstart, the last two read-side `NotImplemented` stubs (`calendarItem` / `calendarItems`) wired, async sibling for `eventsMatchingPredicate`, ARC adoption in the native addon, and round-trip test coverage backfilled for every Phase 6 feature. No breaking changes.
+
 ### Added
 
 - Continuous integration via GitHub Actions on `macos-latest` (Node 20, 22). Workflow at `.github/workflows/ci.yml` runs `npm ci` (rebuilds the native addon) + `npm run build:ts` + `npm test` on every push to `development` and every pull request. CI badge added to the readme. Manual-only tests stay skipped (the runner has no Calendar.app database and no `TEST_CALENDAR_ID` secret).
