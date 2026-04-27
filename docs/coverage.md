@@ -90,16 +90,17 @@ Declared in `src/EKEvent.ts`. Populated by `_eventToNapi` in the native layer.
 | `hasRecurrenceRules` | `boolean` | ✅ | |
 | `hasAttendees` | `boolean` | ✅ | |
 | `eventIdentifier` | `string` | ✅ | |
-| `availability` | `number` | ✅ | raw Apple enum code; string consts deferred to Phase 6 |
+| `availability` | `EKEventAvailability` | ✅ | string union: `"notSupported" \| "busy" \| "free" \| "tentative" \| "unavailable"` |
 | `startDate` | `Date` | ✅ | |
 | `endDate` | `Date` | ✅ | |
 | `isAllDay` | `boolean` | ✅ | |
 | `occurrenceDate` | `Date` | ✅ | typo `occurenceDate` fixed 2026-04-23 |
 | `isDetached` | `boolean` | ✅ | |
-| `organizer` | `string \| null` | ✅ | shallow proxy: `participant.name`; full `EKParticipant` deferred to Phase 6 |
-| `status` | `number` | ✅ | raw Apple enum code; string consts deferred to Phase 6 |
+| `organizer` | `EKParticipant \| null` | ✅ | full participant via `_participantToNapi` |
+| `attendees` | `EKParticipant[] \| null` | ✅ | each via `_participantToNapi` |
+| `status` | `EKEventStatus` | ✅ | string union: `"none" \| "confirmed" \| "tentative" \| "canceled"` (read-only on Apple) |
 | `birthdayContactIdentifier` | `string \| null` | ✅ | |
-| `structuredLocation` | `string \| null` | ✅ | shallow proxy: `location.title`; full `EKStructuredLocation` deferred to Phase 6 |
+| `structuredLocation` | `EKStructuredLocation \| null` | ✅ | full shape via `_structuredLocationToNapi` (`title`, `geoLocation: {latitude, longitude}`, `radius`) |
 | `recurrenceRules` | `EKRecurrenceRule[] \| null` | ✅ | full marshal via `_recurrenceRulesToNapi`; clear-and-add on save |
 | `alarms` | `EKAlarm[] \| null` | ✅ | full marshal via `_alarmsToNapi`; clear-and-add on save |
 
@@ -199,6 +200,37 @@ Native helpers: `_recurrenceRuleToNapi` (read), `_jsToEKRecurrenceRule` (write �
 
 ---
 
+## EKParticipant
+
+Declared in `src/EKParticipant.ts`. Read-only — fetched via `EKEvent.organizer` and `EKEvent.attendees`. Apple's `EKAttendee` subclass adds nothing surfaced here; consumers can discriminate via `type` if needed.
+
+| Property | Type | Notes |
+|---|---|---|
+| `name` | `string \| null` | display name |
+| `url` | `string \| null` | typically `"mailto:foo@bar.com"` |
+| `type` | `EKParticipantType` | `"unknown" \| "person" \| "room" \| "resource" \| "group"` |
+| `role` | `EKParticipantRole` | `"unknown" \| "required" \| "optional" \| "chair" \| "nonParticipant"` |
+| `status` | `EKParticipantStatus` | `"unknown" \| "pending" \| "accepted" \| "declined" \| "tentative" \| "delegated" \| "completed" \| "inProcess"` |
+| `isCurrentUser` | `boolean` | |
+
+Apple's `contactPredicate` (NSPredicate matching the participant in Contacts.framework) intentionally not surfaced — niche, would require linking the Contacts framework.
+
+---
+
+## EKStructuredLocation
+
+Declared in `src/EKStructuredLocation.ts`. Read on `EKEvent.structuredLocation`; writable via the same field on save.
+
+| Property | Type | Notes |
+|---|---|---|
+| `title` | `string \| null` | display name |
+| `geoLocation` | `{ latitude, longitude } \| null` | `CLLocation`-derived |
+| `radius` | `number` | meters; 0 = use default |
+
+Native links `-framework CoreLocation` for `CLLocation` access.
+
+---
+
 ## EKAlarm
 
 Declared in `src/EKAlarm.ts` (interface, not class — alarms are pure data). Read via `EKEvent.alarms` and `EKReminder.alarms`; written by setting that field and calling `store.save(...)` (clear-and-add semantics).
@@ -257,6 +289,11 @@ Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) a
 | `EKErrorCode` | `src/EKErrorCode.ts` | const object + `typeof` | 32 values, e.g. `"eventNotMutable"`, `"calendarReadOnly"`, `"unknown"` (catch-all for forward-compat) |
 | `EKAlarmType` | `src/EKAlarmType.ts` | const object + `typeof` | `"display"`, `"audio"`, `"procedure"`, `"email"` |
 | `EKAlarmProximity` | `src/EKAlarmProximity.ts` | const object + `typeof` | `"none"`, `"enter"`, `"leave"` |
+| `EKParticipantType` | `src/EKParticipantType.ts` | const object + `typeof` | `"unknown"`, `"person"`, `"room"`, `"resource"`, `"group"` |
+| `EKParticipantRole` | `src/EKParticipantRole.ts` | const object + `typeof` | `"unknown"`, `"required"`, `"optional"`, `"chair"`, `"nonParticipant"` |
+| `EKParticipantStatus` | `src/EKParticipantStatus.ts` | const object + `typeof` | `"unknown"`, `"pending"`, `"accepted"`, `"declined"`, `"tentative"`, `"delegated"`, `"completed"`, `"inProcess"` |
+| `EKEventAvailability` | `src/EKEventAvailability.ts` | const object + `typeof` | `"notSupported"`, `"busy"`, `"free"`, `"tentative"`, `"unavailable"` |
+| `EKEventStatus` | `src/EKEventStatus.ts` | const object + `typeof` | `"none"`, `"confirmed"`, `"tentative"`, `"canceled"` |
 | `DateComponents` | `src/EKReminder.ts` | **interface** (not const-object) | shape: `{ year, month, day, hour, minute, second }`, each `number \| null` |
 
 Convention: const-object-with-string-values + `typeof` alias, so the runtime values are JSON-friendly strings and string-equality checks work across the napi boundary.

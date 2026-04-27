@@ -11,7 +11,9 @@
 #include <EventKit/EKAlarm.h>
 #include <EventKit/EKStructuredLocation.h>
 #include <EventKit/EKError.h>
+#include <EventKit/EKParticipant.h>
 #include <Foundation/Foundation.h>
+#include <CoreLocation/CoreLocation.h>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -190,6 +192,77 @@ static void _applyJsToEKCalendar(Napi::Env env, EKCalendar* target, Napi::Object
             }
         }
     }
+}
+
+// EKParticipantType raw (EventKit/EKTypes.h): 0=Unknown..4=Group.
+static const char* _ekParticipantTypeToString(EKParticipantType t) {
+    switch (t) {
+        case EKParticipantTypeUnknown:  return "unknown";
+        case EKParticipantTypePerson:   return "person";
+        case EKParticipantTypeRoom:     return "room";
+        case EKParticipantTypeResource: return "resource";
+        case EKParticipantTypeGroup:    return "group";
+    }
+    return "unknown";
+}
+
+// EKParticipantRole raw: 0=Unknown..4=NonParticipant.
+static const char* _ekParticipantRoleToString(EKParticipantRole r) {
+    switch (r) {
+        case EKParticipantRoleUnknown:        return "unknown";
+        case EKParticipantRoleRequired:       return "required";
+        case EKParticipantRoleOptional:       return "optional";
+        case EKParticipantRoleChair:          return "chair";
+        case EKParticipantRoleNonParticipant: return "nonParticipant";
+    }
+    return "unknown";
+}
+
+// EKParticipantStatus raw: 0=Unknown..7=InProcess.
+static const char* _ekParticipantStatusToString(EKParticipantStatus s) {
+    switch (s) {
+        case EKParticipantStatusUnknown:   return "unknown";
+        case EKParticipantStatusPending:   return "pending";
+        case EKParticipantStatusAccepted:  return "accepted";
+        case EKParticipantStatusDeclined:  return "declined";
+        case EKParticipantStatusTentative: return "tentative";
+        case EKParticipantStatusDelegated: return "delegated";
+        case EKParticipantStatusCompleted: return "completed";
+        case EKParticipantStatusInProcess: return "inProcess";
+    }
+    return "unknown";
+}
+
+// EKEventAvailability raw: -1=NotSupported..3=Unavailable.
+static const char* _ekEventAvailabilityToString(EKEventAvailability a) {
+    switch (a) {
+        case EKEventAvailabilityNotSupported: return "notSupported";
+        case EKEventAvailabilityBusy:         return "busy";
+        case EKEventAvailabilityFree:         return "free";
+        case EKEventAvailabilityTentative:    return "tentative";
+        case EKEventAvailabilityUnavailable:  return "unavailable";
+    }
+    return "busy";
+}
+
+static EKEventAvailability _stringToEKEventAvailability(Napi::Env env, const std::string& s) {
+    if (s == "notSupported") return EKEventAvailabilityNotSupported;
+    if (s == "busy")         return EKEventAvailabilityBusy;
+    if (s == "free")         return EKEventAvailabilityFree;
+    if (s == "tentative")    return EKEventAvailabilityTentative;
+    if (s == "unavailable")  return EKEventAvailabilityUnavailable;
+    throw Napi::Error::New(env, std::string("Unknown EKEventAvailability: ") + s);
+}
+
+// EKEventStatus raw: 0=None..3=Canceled.
+static const char* _ekEventStatusToString(EKEventStatus s) {
+    switch (s) {
+        case EKEventStatusNone:      return "none";
+        case EKEventStatusConfirmed: return "confirmed";
+        case EKEventStatusTentative: return "tentative";
+        case EKEventStatusCanceled:  return "canceled";
+    }
+    return "none";
 }
 
 static void _setOrNull(Napi::Object obj, const char* key, NSString* s) {
@@ -567,6 +640,88 @@ static EKAlarm* _jsToEKAlarm(Napi::Env env, Napi::Object source) {
     return a;
 }
 
+static Napi::Value _participantToNapi(Napi::Env env, EKParticipant* p) {
+    if (p == nil) return env.Null();
+    Napi::Object obj = Napi::Object::New(env);
+    _setOrNull(obj, "name", [p name]);
+    _setOrNull(obj, "url",  [[p URL] absoluteString]);
+    obj.Set("type",          _ekParticipantTypeToString([p participantType]));
+    obj.Set("role",          _ekParticipantRoleToString([p participantRole]));
+    obj.Set("status",        _ekParticipantStatusToString([p participantStatus]));
+    obj.Set("isCurrentUser", (bool)[p isCurrentUser]);
+    return obj;
+}
+
+static Napi::Value _attendeesToNapi(Napi::Env env, NSArray<EKParticipant*>* attendees) {
+    if (attendees == nil || [attendees count] == 0) return env.Null();
+    Napi::Array out = Napi::Array::New(env, [attendees count]);
+    for (NSUInteger i = 0; i < [attendees count]; i++) {
+        out[i] = _participantToNapi(env, attendees[i]);
+    }
+    return out;
+}
+
+static Napi::Value _structuredLocationToNapi(Napi::Env env, EKStructuredLocation* loc) {
+    if (loc == nil) return env.Null();
+    Napi::Object obj = Napi::Object::New(env);
+    _setOrNull(obj, "title", [loc title]);
+
+    CLLocation* geo = [loc geoLocation];
+    if (geo != nil) {
+        Napi::Object g = Napi::Object::New(env);
+        CLLocationCoordinate2D c = [geo coordinate];
+        g.Set("latitude",  c.latitude);
+        g.Set("longitude", c.longitude);
+        obj.Set("geoLocation", g);
+    } else {
+        obj.Set("geoLocation", env.Null());
+    }
+
+    obj.Set("radius", (double)[loc radius]);
+    return obj;
+}
+
+// Build an EKStructuredLocation from a JS shape. Returns autoreleased.
+// Returns nil if `source` is null/undefined or lacks any usable field.
+static EKStructuredLocation* _jsToStructuredLocation(Napi::Env env, Napi::Value source) {
+    if (!source.IsObject() || source.IsNull()) return nil;
+    Napi::Object obj = source.As<Napi::Object>();
+
+    NSString* title = nil;
+    if (obj.Has("title")) {
+        Napi::Value v = obj.Get("title");
+        if (v.IsString()) title = @(v.As<Napi::String>().Utf8Value().c_str());
+    }
+
+    EKStructuredLocation* sl = title
+        ? [EKStructuredLocation locationWithTitle:title]
+        : [EKStructuredLocation locationWithTitle:@""];
+
+    if (obj.Has("geoLocation")) {
+        Napi::Value v = obj.Get("geoLocation");
+        if (v.IsObject() && !v.IsNull()) {
+            Napi::Object g = v.As<Napi::Object>();
+            if (g.Has("latitude") && g.Has("longitude")) {
+                Napi::Value latV = g.Get("latitude");
+                Napi::Value lngV = g.Get("longitude");
+                if (latV.IsNumber() && lngV.IsNumber()) {
+                    CLLocation* loc = [[[CLLocation alloc]
+                        initWithLatitude:latV.As<Napi::Number>().DoubleValue()
+                               longitude:lngV.As<Napi::Number>().DoubleValue()] autorelease];
+                    sl.geoLocation = loc;
+                }
+            }
+        }
+    }
+
+    if (obj.Has("radius")) {
+        Napi::Value v = obj.Get("radius");
+        if (v.IsNumber()) sl.radius = v.As<Napi::Number>().DoubleValue();
+    }
+
+    return sl;
+}
+
 static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     Napi::Object obj = Napi::Object::New(env);
 
@@ -577,10 +732,12 @@ static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     _setOrNull(obj, "notes",                     [ev notes]);
     _setOrNull(obj, "url",                       [[ev URL] absoluteString]);
     _setOrNull(obj, "timeZone",                  [[ev timeZone] name]);
-    _setOrNull(obj, "organizer",                 [[ev organizer] name]);
-    _setOrNull(obj, "structuredLocation",        [[ev structuredLocation] title]);
     _setOrNull(obj, "birthdayContactIdentifier", [ev birthdayContactIdentifier]);
     _setOrNull(obj, "eventIdentifier",           [ev eventIdentifier]);
+
+    obj.Set("organizer",          _participantToNapi(env, [ev organizer]));
+    obj.Set("attendees",          _attendeesToNapi(env, [ev attendees]));
+    obj.Set("structuredLocation", _structuredLocationToNapi(env, [ev structuredLocation]));
 
     _setDateOrNull(obj, "lastModifiedDate", [ev lastModifiedDate]);
     _setDateOrNull(obj, "creationDate",     [ev creationDate]);
@@ -595,8 +752,8 @@ static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     obj.Set("isAllDay",           (bool)[ev isAllDay]);
     obj.Set("isDetached",         (bool)[ev isDetached]);
 
-    obj.Set("availability",       (int32_t)[ev availability]);
-    obj.Set("status",             (int32_t)[ev status]);
+    obj.Set("availability",       _ekEventAvailabilityToString([ev availability]));
+    obj.Set("status",             _ekEventStatusToString([ev status]));
 
     obj.Set("recurrenceRules", _recurrenceRulesToNapi(env, [ev recurrenceRules]));
     obj.Set("alarms",          _alarmsToNapi(env, [ev alarms]));
@@ -826,8 +983,18 @@ static void _applyJsToEKEvent(Napi::Env env, EKEvent* target, Napi::Object sourc
 
     if (source.Has("availability")) {
         Napi::Value v = source.Get("availability");
-        if (v.IsNumber()) {
-            target.availability = (EKEventAvailability)v.As<Napi::Number>().Int32Value();
+        if (v.IsString()) {
+            target.availability = _stringToEKEventAvailability(env,
+                v.As<Napi::String>().Utf8Value());
+        }
+    }
+
+    if (source.Has("structuredLocation")) {
+        Napi::Value v = source.Get("structuredLocation");
+        if (v.IsObject() && !v.IsNull()) {
+            target.structuredLocation = _jsToStructuredLocation(env, v);
+        } else if (v.IsNull()) {
+            target.structuredLocation = nil;
         }
     }
 

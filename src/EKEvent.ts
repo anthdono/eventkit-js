@@ -1,14 +1,15 @@
 // developer.apple.com/documentation/eventkit/ekevent
 //
-// Some properties are shallow proxies for the full Apple type:
-//   - organizer: Apple returns EKParticipant; we surface participant.name.
-//   - structuredLocation: Apple returns EKStructuredLocation; we surface .title.
-//   - availability, status: raw integer codes from the Apple enums; string
-//     consts to be added in Phase 6 when a consumer needs them.
+// Apple's `EKEvent.contactPredicate` (Contacts.framework integration) is
+// not surfaced — see EKParticipant for rationale.
 
 import { EKCalendar } from "./EKCalendar";
 import { EKRecurrenceRule } from "./EKRecurrenceRule";
 import { EKAlarm } from "./EKAlarm";
+import { EKParticipant } from "./EKParticipant";
+import { EKStructuredLocation } from "./EKStructuredLocation";
+import { EKEventAvailability } from "./EKEventAvailability";
+import { EKEventStatus } from "./EKEventStatus";
 
 export class EKEvent {
     calendar: EKCalendar;
@@ -24,16 +25,17 @@ export class EKEvent {
     hasAttendees: boolean;
 
     eventIdentifier: string;
-    availability: number;
+    availability: EKEventAvailability;
     startDate: Date;
     endDate: Date;
     isAllDay: boolean;
     occurrenceDate: Date;
     isDetached: boolean;
-    organizer: string | null;
-    status: number;
+    organizer: EKParticipant | null;
+    attendees: EKParticipant[] | null;
+    status: EKEventStatus;
     birthdayContactIdentifier: string | null;
-    structuredLocation: string | null;
+    structuredLocation: EKStructuredLocation | null;
     recurrenceRules: EKRecurrenceRule[] | null;
     alarms: EKAlarm[] | null;
 }

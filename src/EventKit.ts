@@ -23,6 +23,14 @@ import { EKErrorCode } from "./EKErrorCode";
 import { EKAlarmType } from "./EKAlarmType";
 import { EKAlarmProximity } from "./EKAlarmProximity";
 import type { EKAlarm } from "./EKAlarm";
+import { EKParticipant } from "./EKParticipant";
+import { EKParticipantType } from "./EKParticipantType";
+import { EKParticipantRole } from "./EKParticipantRole";
+import { EKParticipantStatus } from "./EKParticipantStatus";
+import { EKStructuredLocation } from "./EKStructuredLocation";
+import type { GeoLocation } from "./EKStructuredLocation";
+import { EKEventAvailability } from "./EKEventAvailability";
+import { EKEventStatus } from "./EKEventStatus";
 
 export {
     EKEventStore,
@@ -44,10 +52,18 @@ export {
     EKErrorCode,
     EKAlarmType,
     EKAlarmProximity,
+    EKParticipant,
+    EKParticipantType,
+    EKParticipantRole,
+    EKParticipantStatus,
+    EKStructuredLocation,
+    EKEventAvailability,
+    EKEventStatus,
 };
 export type {
     EKRecurrenceRule,
     EKRecurrenceEnd,
     EKRecurrenceDayOfWeek,
     EKAlarm,
+    GeoLocation,
 };
