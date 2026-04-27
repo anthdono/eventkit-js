@@ -33,8 +33,8 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `defaultCalendarForNewReminders()` | ✅ | — |
 | `calendars(forEntityType)` | ✅ | — |
 | `calendar(withIdentifier)` | ✅ | — |
-| `saveCalendar(c, commit)` | 🟡 | Phase 6 (calendar CRUD) |
-| `removeCalendar(c, commit)` | 🟡 | Phase 6 (calendar CRUD) |
+| `saveCalendar(c, commit)` | ✅ | — |
+| `removeCalendar(c, commit)` | ✅ | — |
 | `event(withIdentifier)` | ✅ | — |
 | `calendarItem(withIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
 | `calendarItems(withExternalIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
@@ -118,10 +118,10 @@ Declared in `src/EKCalendar.ts`. Populated by `_calendarToNapi` in the native la
 | `type` | `EKCalendarType` | ✅ |
 | `sourceIdentifier` | `string` | ✅ |
 | `allowsContentModifications` | `boolean` | ✅ |
+| `color` | `string \| null` | ✅ — hex `"#RRGGBB"`, drops alpha; round-trips at integer 0..255 precision |
+| `allowedEntityTypes` | `EKEntityType[]` | ✅ — bitmask flattened to array of `"event"`/`"reminder"` |
 
-Explicitly deferred (scheduled for later phases):
-- `CGColor` — expose as hex string `"#RRGGBB"` when Phase 6 (calendar CRUD) needs it.
-- `allowedEntityTypes` bitmask — defer until a consumer asks.
+Calendar CRUD: `saveCalendar(calendar, commit)` and `removeCalendar(calendar, commit)` on `EKEventStore`. New calendars require `allowedEntityTypes` (the first element picks Apple's `EKEntityType` for the constructor). `color` accepts `"#RRGGBB"` hex; malformed hex throws `TypeError`. Errors from Apple (e.g., `calendarSourceCannotBeModified`) come through as structured `EKError`.
 
 ## EKReminder
 
@@ -260,4 +260,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **7** as of 2026-04-27. The residual seven: `init(sources)`, `delegateSources`, `cancelFetchRequest` (intentionally `NotImplemented` per the `AbortSignal` supersession), `calendarItem`, `calendarItems`, `saveCalendar`, `removeCalendar`.
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **5** as of 2026-04-27. The residual five: `init(sources)`, `delegateSources`, `cancelFetchRequest` (intentionally `NotImplemented` per the `AbortSignal` supersession), `calendarItem`, `calendarItems`.

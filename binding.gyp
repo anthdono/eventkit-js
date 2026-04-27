@@ -11,7 +11,7 @@
       "cflags_cc!": [ "-fno-exceptions" ],
       "cxxflags": [ "-std=c++17" ],
       "xcode_settings": {
-        "OTHER_LDFLAGS": [ "-framework", "EventKit" ],
+        "OTHER_LDFLAGS": [ "-framework", "EventKit", "-framework", "CoreGraphics" ],
         "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
         "CLANG_CXX_LANGUAGE_STANDARD": "c++17"
       }

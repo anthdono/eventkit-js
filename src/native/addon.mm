@@ -80,6 +80,53 @@ static const char* getEKCalendarTypeString(EKCalendarType type) {
     }
 }
 
+// Marshal a CGColorRef to an "#RRGGBB" hex string. Drops alpha. nullptr → "".
+static std::string _cgColorToHex(CGColorRef color) {
+    if (color == nullptr) return std::string();
+    const CGFloat* c = CGColorGetComponents(color);
+    size_t n = CGColorGetNumberOfComponents(color);
+    int r = 0, g = 0, b = 0;
+    if (n >= 3) {
+        r = (int)(c[0] * 255 + 0.5);
+        g = (int)(c[1] * 255 + 0.5);
+        b = (int)(c[2] * 255 + 0.5);
+    } else if (n >= 1) {
+        // Grayscale (with optional alpha): gray + alpha = 2 components.
+        r = g = b = (int)(c[0] * 255 + 0.5);
+    }
+    if (r < 0) r = 0; if (r > 255) r = 255;
+    if (g < 0) g = 0; if (g > 255) g = 255;
+    if (b < 0) b = 0; if (b > 255) b = 255;
+    char buf[8];
+    snprintf(buf, sizeof(buf), "#%02X%02X%02X", r, g, b);
+    return std::string(buf);
+}
+
+// Parse "#RRGGBB" into a retained CGColorRef. Returns nullptr on malformed input.
+// Caller releases.
+static CGColorRef _hexToCGColor(const std::string& hex) {
+    if (hex.size() != 7 || hex[0] != '#') return nullptr;
+    unsigned r = 0, g = 0, b = 0;
+    if (sscanf(hex.c_str(), "#%2x%2x%2x", &r, &g, &b) != 3) return nullptr;
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CGFloat components[] = { r / 255.0, g / 255.0, b / 255.0, 1.0 };
+    CGColorRef out = CGColorCreate(cs, components);
+    CGColorSpaceRelease(cs);
+    return out;
+}
+
+// Apple's EKEntityMask is a bitmask. Surface as an array of strings.
+static Napi::Array _entityMaskToNapi(Napi::Env env, EKEntityMask mask) {
+    int count = 0;
+    if (mask & EKEntityMaskEvent)    count++;
+    if (mask & EKEntityMaskReminder) count++;
+    Napi::Array out = Napi::Array::New(env, count);
+    int idx = 0;
+    if (mask & EKEntityMaskEvent)    out[idx++] = "event";
+    if (mask & EKEntityMaskReminder) out[idx++] = "reminder";
+    return out;
+}
+
 static Napi::Object _calendarToNapi(Napi::Env env, EKCalendar* cal) {
     Napi::Object obj = Napi::Object::New(env);
     obj.Set("calendarIdentifier",         [[cal calendarIdentifier] UTF8String]);
@@ -87,7 +134,59 @@ static Napi::Object _calendarToNapi(Napi::Env env, EKCalendar* cal) {
     obj.Set("type",                       getEKCalendarTypeString([cal type]));
     obj.Set("sourceIdentifier",           [[[cal source] sourceIdentifier] UTF8String]);
     obj.Set("allowsContentModifications", (bool)[cal allowsContentModifications]);
+
+    std::string hex = _cgColorToHex([cal CGColor]);
+    if (hex.empty()) obj.Set("color", env.Null());
+    else             obj.Set("color", hex.c_str());
+
+    obj.Set("allowedEntityTypes", _entityMaskToNapi(env, [cal allowedEntityTypes]));
     return obj;
+}
+
+// Apply writable fields from a JS plain-object onto an EKCalendar*.
+// Convention: undefined → leave unchanged, null → clear (where allowed),
+// present → set.
+//
+// Apple write-restrictions:
+//   - `type` is essentially read-only (reflects the source). Skipped.
+//   - `source` is mutable but only on never-saved calendars; we recognise it
+//     via `sourceIdentifier` lookup.
+//   - `allowedEntityTypes` is normally only meaningful at creation time;
+//     surfacing on write for completeness.
+static void _applyJsToEKCalendar(Napi::Env env, EKCalendar* target, Napi::Object source) {
+    if (source.Has("title")) {
+        Napi::Value v = source.Get("title");
+        if (v.IsString()) target.title = @(v.As<Napi::String>().Utf8Value().c_str());
+    }
+
+    if (source.Has("color")) {
+        Napi::Value v = source.Get("color");
+        if (v.IsString()) {
+            std::string hex = v.As<Napi::String>().Utf8Value();
+            CGColorRef cg = _hexToCGColor(hex);
+            if (cg != nullptr) {
+                target.CGColor = cg;
+                CGColorRelease(cg);
+            } else {
+                throw Napi::TypeError::New(env, std::string("EKCalendar.color must be \"#RRGGBB\" hex, got: ") + hex);
+            }
+        } else if (v.IsNull()) {
+            target.CGColor = nullptr;
+        }
+    }
+
+    if (source.Has("sourceIdentifier")) {
+        Napi::Value v = source.Get("sourceIdentifier");
+        if (v.IsString()) {
+            std::string id = v.As<Napi::String>().Utf8Value();
+            for (EKSource* s in [store sources]) {
+                if ([[s sourceIdentifier] isEqualToString:@(id.c_str())]) {
+                    target.source = s;
+                    break;
+                }
+            }
+        }
+    }
 }
 
 static void _setOrNull(Napi::Object obj, const char* key, NSString* s) {
@@ -1285,6 +1384,78 @@ static Napi::Value RemoveReminder(const Napi::CallbackInfo& info) {
 }
 
 // -----------------------------------------------------------------------------
+// ------------------------------ Calendar CRUD --------------------------------
+// -----------------------------------------------------------------------------
+
+static Napi::Value SaveCalendar(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::Object calObj = info[0].As<Napi::Object>();
+    bool commitFlag = info[1].As<Napi::Boolean>().Value();
+
+    EKCalendar* cal = nil;
+
+    // Existing calendar lookup.
+    if (calObj.Has("calendarIdentifier")) {
+        Napi::Value v = calObj.Get("calendarIdentifier");
+        if (v.IsString()) {
+            std::string id = v.As<Napi::String>().Utf8Value();
+            cal = [store calendarWithIdentifier:@(id.c_str())];
+        }
+    }
+
+    // Create new calendar. Apple requires the entity type at construction.
+    if (cal == nil) {
+        EKEntityType primary = EKEntityTypeEvent;
+        if (calObj.Has("allowedEntityTypes")) {
+            Napi::Value v = calObj.Get("allowedEntityTypes");
+            if (v.IsArray()) {
+                Napi::Array types = v.As<Napi::Array>();
+                if (types.Length() > 0) {
+                    Napi::Value first = types.Get((uint32_t)0);
+                    if (first.IsString()) {
+                        std::string s = first.As<Napi::String>().Utf8Value();
+                        if (s == "reminder") primary = EKEntityTypeReminder;
+                    }
+                }
+            }
+        }
+        cal = [EKCalendar calendarForEntityType:primary eventStore:store];
+    }
+
+    _applyJsToEKCalendar(env, cal, calObj);
+
+    NSError* error = nil;
+    BOOL ok = [store saveCalendar:cal commit:commitFlag error:&error];
+    if (!ok) {
+        throw _napiErrorFromNSError(env, error, "saveCalendar failed");
+    }
+
+    return Napi::String::New(env, [[cal calendarIdentifier] UTF8String]);
+}
+
+static Napi::Value RemoveCalendar(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::Object calObj = info[0].As<Napi::Object>();
+    bool commitFlag = info[1].As<Napi::Boolean>().Value();
+
+    if (!calObj.Has("calendarIdentifier") || !calObj.Get("calendarIdentifier").IsString()) {
+        throw Napi::TypeError::New(env, "removeCalendar requires calendar with calendarIdentifier");
+    }
+    std::string id = calObj.Get("calendarIdentifier").As<Napi::String>().Utf8Value();
+    EKCalendar* cal = [store calendarWithIdentifier:@(id.c_str())];
+    if (cal == nil) {
+        throw Napi::Error::New(env, "calendar not found");
+    }
+
+    NSError* error = nil;
+    BOOL ok = [store removeCalendar:cal commit:commitFlag error:&error];
+    if (!ok) {
+        throw _napiErrorFromNSError(env, error, "removeCalendar failed");
+    }
+    return env.Undefined();
+}
+
+// -----------------------------------------------------------------------------
 // --------------------------------- Node-API ----------------------------------
 // -----------------------------------------------------------------------------
 
@@ -1316,6 +1487,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("fetchReminders",                   Napi::Function::New(env, FetchReminders));
     exports.Set("saveReminder",                     Napi::Function::New(env, SaveReminder));
     exports.Set("removeReminder",                   Napi::Function::New(env, RemoveReminder));
+    exports.Set("saveCalendar",                     Napi::Function::New(env, SaveCalendar));
+    exports.Set("removeCalendar",                   Napi::Function::New(env, RemoveCalendar));
     return exports;
 }
 

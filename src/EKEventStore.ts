@@ -85,14 +85,16 @@ export class EKEventStore {
         return addon.calendar(withIdentifier);
     }
 
-    // throws error
+    // throws EKError on save failure (e.g., calendarSourceCannotBeModified)
     public saveCalendar(calendar: EKCalendar, commit: boolean): void {
-        throw new NotImplemented;
+        try { addon.saveCalendar(calendar, commit); }
+        catch (e) { throw _wrapNativeError(e); }
     }
 
-    // throws error
+    // throws EKError on remove failure
     public removeCalendar(calendar: EKCalendar, commit: boolean): void {
-        throw new NotImplemented;
+        try { addon.removeCalendar(calendar, commit); }
+        catch (e) { throw _wrapNativeError(e); }
     }
 
     public event(withIdentifier: String): EKEvent | null {
