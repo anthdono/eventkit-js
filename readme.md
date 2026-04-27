@@ -1,5 +1,7 @@
 # eventkit-js
 
+English | [简体中文](./readme.zh-CN.md)
+
 Node-API wrapper for Apple's [EventKit](https://developer.apple.com/documentation/eventkit) framework — read and write Calendar events and Reminders from Node.js on macOS.
 
 Phases 0–5 (calendars, events read/write/streaming, reminders) are complete. Phase 6 — alarms, recurrence rules, participants, structured location, calendar CRUD, change notifications — is on the roadmap; see "Known limitations" in [`CHANGELOG.md`](./CHANGELOG.md).
