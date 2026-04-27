@@ -202,7 +202,8 @@ Declared in `src/EKAlarm.ts` (interface, not class — alarms are pure data). Re
 | `structuredLocation` | `string \| null` | shallow proxy: `location.title`. Deepens to full `EKStructuredLocation` when instruction 16 ships. |
 | `emailAddress` | `string \| null` | for `type: "email"` alarms |
 | `soundName` | `string \| null` | for `type: "audio"` alarms |
-| `url` | `string \| null` | for procedure alarms (Apple-deprecated but in the enum) |
+
+(Apple's `EKAlarm.url` field was deprecated alongside procedure alarms in macOS 10.9 and is not surfaced.)
 
 Construction: pass exactly one of `relativeOffset` or `absoluteDate`. Native throws if both or neither are provided.
 

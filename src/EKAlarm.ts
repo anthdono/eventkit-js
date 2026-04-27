@@ -21,5 +21,6 @@ export interface EKAlarm {
 
     emailAddress: string | null;
     soundName: string | null;
-    url: string | null;
+    // Apple's `EKAlarm.url` (procedure alarms) was deprecated in macOS 10.9
+    // and removed from the supported surface. Not exposed.
 }

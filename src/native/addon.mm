@@ -10,6 +10,7 @@
 #include <EventKit/EKRecurrenceDayOfWeek.h>
 #include <EventKit/EKAlarm.h>
 #include <EventKit/EKStructuredLocation.h>
+#include <EventKit/EKError.h>
 #include <Foundation/Foundation.h>
 #include <atomic>
 #import "TestClass.mm"
@@ -237,13 +238,13 @@ static const char* _ekWeekdayToString(EKWeekday w) {
 }
 
 static EKWeekday _stringToEKWeekday(Napi::Env env, const std::string& s) {
-    if (s == "sunday")    return EKSunday;
-    if (s == "monday")    return EKMonday;
-    if (s == "tuesday")   return EKTuesday;
-    if (s == "wednesday") return EKWednesday;
-    if (s == "thursday")  return EKThursday;
-    if (s == "friday")    return EKFriday;
-    if (s == "saturday")  return EKSaturday;
+    if (s == "sunday")    return EKWeekdaySunday;
+    if (s == "monday")    return EKWeekdayMonday;
+    if (s == "tuesday")   return EKWeekdayTuesday;
+    if (s == "wednesday") return EKWeekdayWednesday;
+    if (s == "thursday")  return EKWeekdayThursday;
+    if (s == "friday")    return EKWeekdayFriday;
+    if (s == "saturday")  return EKWeekdaySaturday;
     throw Napi::Error::New(env, ("Unknown weekday: " + s).c_str());
 }
 
@@ -489,7 +490,8 @@ static Napi::Object _alarmToNapi(Napi::Env env, EKAlarm* a) {
 
     _setOrNull(obj, "emailAddress", [a emailAddress]);
     _setOrNull(obj, "soundName",    [a soundName]);
-    _setOrNull(obj, "url",          [[a url] absoluteString]);
+    // Apple deprecated EKAlarm.url in macOS 10.9 along with the rest of
+    // the procedure-alarm functionality. Not surfaced.
 
     return obj;
 }
@@ -555,11 +557,8 @@ static EKAlarm* _jsToEKAlarm(Napi::Env env, Napi::Object source) {
         if (v.IsString())    a.soundName = @(v.As<Napi::String>().Utf8Value().c_str());
         else if (v.IsNull()) a.soundName = nil;
     }
-    if (source.Has("url")) {
-        Napi::Value v = source.Get("url");
-        if (v.IsString())    a.url = [NSURL URLWithString:@(v.As<Napi::String>().Utf8Value().c_str())];
-        else if (v.IsNull()) a.url = nil;
-    }
+    // EKAlarm.url is deprecated by Apple (procedure alarms removed in 10.9);
+    // intentionally not recognised on the write path.
     // type is read-only on EKAlarm — derived from which fields are set.
     // structuredLocation: deferred to instruction 16.
 
@@ -664,7 +663,7 @@ static Napi::Object _reminderToNapi(Napi::Env env, EKReminder* r) {
 
     obj.Set("hasAlarms",          (bool)[r hasAlarms]);
     obj.Set("hasRecurrenceRules", (bool)[r hasRecurrenceRules]);
-    obj.Set("completed",          (bool)[r completed]);
+    obj.Set("completed",          (bool)[r isCompleted]);
     obj.Set("priority",           (int32_t)[r priority]);
 
     _dateComponentsOrNull(obj, "startDateComponents", [r startDateComponents]);
