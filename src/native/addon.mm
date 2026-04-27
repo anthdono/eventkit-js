@@ -62,6 +62,21 @@ static Napi::Error _napiErrorFromNSError(Napi::Env env, NSError* error, const ch
     return Napi::Error(env, errObj);
 }
 
+// Drain a single iteration of the main run loop. EventKit posts
+// EKEventStoreChangedNotification via a CFRunLoopSource that requires a
+// run-loop iteration to fire — but libuv's loop doesn't pump Cocoa run
+// loops, so without this drain the notification queues indefinitely and
+// any registered `'change'` listener never fires. Called after every
+// write that could mutate the calendar database (save/remove/commit).
+//
+// `seconds: 0` + `returnAfterSourceHandled: true` makes this a single
+// non-blocking iteration: process whatever sources are immediately
+// ready, then return. Fast path is a few microseconds when nothing's
+// pending.
+static void _drainPendingNotifications() {
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
+}
+
 static const char* getEKSourceTypeString(EKSourceType source) {
     switch (source) {
         case EKSourceTypeLocal:      return "Local";
@@ -1370,20 +1385,11 @@ static Napi::Value SaveEvent(const Napi::CallbackInfo& info) {
     _applyJsToEKEvent(env, ekEvent, eventObj);
 
     NSError* error = nil;
-    fprintf(stderr, "[eventkit-js] saveEvent: about to call\n"); fflush(stderr);
     BOOL ok = [store saveEvent:ekEvent span:span commit:commitFlag error:&error];
-    fprintf(stderr, "[eventkit-js] saveEvent: returned ok=%d\n", (int)ok); fflush(stderr);
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "saveEvent failed");
     }
-
-    // Drain pending CFRunLoop sources on the main run loop. EventKit posts
-    // EKEventStoreChangedNotification via a CFRunLoopSource that requires a
-    // run-loop iteration to fire; libuv doesn't pump Cocoa run loops, so
-    // without this drain the notification queues forever.
-    fprintf(stderr, "[eventkit-js] saveEvent: draining main run loop\n"); fflush(stderr);
-    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
-    fprintf(stderr, "[eventkit-js] saveEvent: drain done\n"); fflush(stderr);
+    _drainPendingNotifications();
 
     return Napi::String::New(env, [[ekEvent eventIdentifier] UTF8String]);
 }
@@ -1409,6 +1415,7 @@ static Napi::Value RemoveEvent(const Napi::CallbackInfo& info) {
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "removeEvent failed");
     }
+    _drainPendingNotifications();
     return env.Undefined();
 }
 
@@ -1419,6 +1426,7 @@ static Napi::Value Commit(const Napi::CallbackInfo& info) {
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "commit failed");
     }
+    _drainPendingNotifications();
     return env.Undefined();
 }
 
@@ -1535,6 +1543,7 @@ static Napi::Value SaveReminder(const Napi::CallbackInfo& info) {
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "saveReminder failed");
     }
+    _drainPendingNotifications();
     return Napi::String::New(env, [[ekReminder calendarItemIdentifier] UTF8String]);
 }
 
@@ -1558,6 +1567,7 @@ static Napi::Value RemoveReminder(const Napi::CallbackInfo& info) {
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "removeReminder failed");
     }
+    _drainPendingNotifications();
     return env.Undefined();
 }
 
@@ -1607,6 +1617,7 @@ static Napi::Value SaveCalendar(const Napi::CallbackInfo& info) {
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "saveCalendar failed");
     }
+    _drainPendingNotifications();
 
     return Napi::String::New(env, [[cal calendarIdentifier] UTF8String]);
 }
@@ -1630,6 +1641,7 @@ static Napi::Value RemoveCalendar(const Napi::CallbackInfo& info) {
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "removeCalendar failed");
     }
+    _drainPendingNotifications();
     return env.Undefined();
 }
 
@@ -1688,12 +1700,12 @@ static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
                             object:nil
                              queue:changeNotifyQueue
                         usingBlock:^(NSNotification* /*n*/) {
-                fprintf(stderr, "[eventkit-js] EKEventStoreChangedNotification fired\n"); fflush(stderr);
                 std::lock_guard<std::mutex> innerLock(subscriptionsMutex);
-                fprintf(stderr, "[eventkit-js]   subscribers: %zu\n", activeSubscriptions.size()); fflush(stderr);
                 for (auto* s : activeSubscriptions) {
-                    napi_status r = s->tsfn.NonBlockingCall();
-                    fprintf(stderr, "[eventkit-js]   tsfn.NonBlockingCall = %d\n", (int)r); fflush(stderr);
+                    // NonBlockingCall: drop on backpressure rather than
+                    // stall the NSNotificationCenter thread. Change events
+                    // are coalesce-able — consumer just refetches latest.
+                    s->tsfn.NonBlockingCall();
                 }
             }] retain];
         }
