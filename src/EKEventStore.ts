@@ -109,8 +109,9 @@ export class EKEventStore {
     public save(reminder: EKReminder, commit: boolean): void;
     public save(item: EKEvent | EKReminder, spanOrCommit: EKSpan | boolean, commit?: boolean): void {
         if (typeof spanOrCommit === "boolean") {
-            // save(reminder, commit) — landed in Phase 5.
-            throw new NotImplemented;
+            // save(reminder, commit)
+            addon.saveReminder(item, spanOrCommit);
+            return;
         }
         const doCommit = commit ?? true;
         addon.saveEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
@@ -120,8 +121,9 @@ export class EKEventStore {
     public remove(reminder: EKReminder, commit: boolean): void;
     public remove(item: EKEvent | EKReminder, spanOrCommit: EKSpan | boolean, commit?: boolean): void {
         if (typeof spanOrCommit === "boolean") {
-            // remove(reminder, commit) — landed in Phase 5.
-            throw new NotImplemented;
+            // remove(reminder, commit)
+            addon.removeReminder(item, spanOrCommit);
+            return;
         }
         const doCommit = commit ?? true;
         addon.removeEvent(item, spanToNative(spanOrCommit as EKSpan), doCommit);
@@ -138,10 +140,28 @@ export class EKEventStore {
         return addon.eventsMatchingPredicate(matching);
     }
 
-    public fetchReminders(matching: NSPredicate): Promise<EKReminder[]> {
-        throw new NotImplemented;
+    public fetchReminders(
+        matching: NSPredicate,
+        options?: { signal?: AbortSignal }
+    ): Promise<EKReminder[]> {
+        const inner: Promise<EKReminder[]> = addon.fetchReminders(matching);
+        const signal = options?.signal;
+        if (!signal) return inner;
+        return new Promise((resolve, reject) => {
+            if (signal.aborted) {
+                reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+                return;
+            }
+            const onAbort = () => reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+            signal.addEventListener("abort", onAbort, { once: true });
+            inner.then(
+                v => { signal.removeEventListener("abort", onAbort); resolve(v); },
+                e => { signal.removeEventListener("abort", onAbort); reject(e); }
+            );
+        });
     }
 
+    // Superseded by AbortSignal — pass { signal } to fetchReminders instead.
     public cancelFetchRequest(fetchIdentifier: any): void {
         throw new NotImplemented;
     }
@@ -155,7 +175,7 @@ export class EKEventStore {
     }
 
     public predicateForReminders(inCalendars: EKCalendar[] | null): NSPredicate {
-        throw new NotImplemented;
+        return addon.predicateForReminders(inCalendars);
     }
 
     public predicateForCompletedReminders(
@@ -163,7 +183,7 @@ export class EKEventStore {
             endDate: Date | null,
             calendars: EKCalendar[] | null
     ): NSPredicate {
-        throw new NotImplemented;
+        return addon.predicateForCompletedReminders(startDate, endDate, calendars);
     }
 
     public predicateForIncompleteReminders(
@@ -171,7 +191,7 @@ export class EKEventStore {
         endDate: Date | null,
         calendars: EKCalendar[] | null
     ): NSPredicate {
-        throw new NotImplemented;
+        return addon.predicateForIncompleteReminders(startDate, endDate, calendars);
     }
  
     // -------------------------------------------------------------------------

@@ -195,6 +195,56 @@ if (!isMac) {
             expect(() => store.refreshSourcesIfNecessary()).not.toThrow();
         });
 
+        it("predicateForReminders returns an opaque handle", () => {
+            const p = store.predicateForReminders(null);
+            expect(typeof p).toBe("object");
+        });
+
+        it("fetchReminders returns an array of well-shaped reminders", async () => {
+            const p = store.predicateForReminders(null);
+            const reminders = await store.fetchReminders(p);
+            expect(Array.isArray(reminders)).toBe(true);
+            for (const r of reminders) {
+                expect(typeof r.calendarItemIdentifier).toBe("string");
+                expect(typeof r.title).toBe("string");
+                expect(typeof r.completed).toBe("boolean");
+            }
+        });
+
+        it("fetchReminders rejects with AbortError when signal pre-aborted", async () => {
+            const p = store.predicateForReminders(null);
+            const ctrl = new AbortController();
+            ctrl.abort();
+            await expect(store.fetchReminders(p, { signal: ctrl.signal }))
+                .rejects.toMatchObject({ name: "AbortError" });
+        });
+
+        it("fetchReminders resolves normally when signal not aborted", async () => {
+            const p = store.predicateForReminders(null);
+            const ctrl = new AbortController();
+            const res = await store.fetchReminders(p, { signal: ctrl.signal });
+            expect(Array.isArray(res)).toBe(true);
+        });
+
+        // Manual-only reminder lifecycle. Set TEST_REMINDER_CALENDAR_ID to a
+        // writable reminder calendar before running.
+        (process.env.TEST_REMINDER_CALENDAR_ID ? it : it.skip)(
+            "save/remove reminder lifecycle (manual)", () => {
+                const cal = store.calendar(process.env.TEST_REMINDER_CALENDAR_ID!);
+                expect(cal).not.toBeNull();
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+                const created: string = addon.saveReminder({
+                    title: "eventkit-js smoke test reminder (delete me)",
+                    calendar: cal,
+                    completed: false,
+                    priority: 5,
+                }, true);
+                expect(typeof created).toBe("string");
+                const stub: any = { calendarItemIdentifier: created };
+                store.remove(stub, true);
+            });
+
         // Manual-only. Flip to `it` and set TEST_CALENDAR_ID to a throwaway
         // calendar before running. This WILL create and delete a real event
         // in that calendar.

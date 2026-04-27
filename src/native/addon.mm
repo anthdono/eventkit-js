@@ -4,6 +4,7 @@
 #include <EventKit/EKSource.h>
 #include <EventKit/EKCalendar.h>
 #include <EventKit/EKCalendarItem.h>
+#include <EventKit/EKReminder.h>
 #include <Foundation/Foundation.h>
 #include <atomic>
 #import "TestClass.mm"
@@ -97,6 +98,76 @@ static Napi::Object _eventToNapi(Napi::Env env, EKEvent* ev) {
     return obj;
 }
 
+static void _dateComponentsOrNull(Napi::Object obj, const char* key, NSDateComponents* dc) {
+    Napi::Env env = obj.Env();
+    if (dc == nil) {
+        obj.Set(key, env.Null());
+        return;
+    }
+    Napi::Object o = Napi::Object::New(env);
+    auto setOrNull = [&](const char* k, NSInteger v) {
+        if (v == NSDateComponentUndefined) o.Set(k, env.Null());
+        else o.Set(k, (int32_t)v);
+    };
+    setOrNull("year",   [dc year]);
+    setOrNull("month",  [dc month]);
+    setOrNull("day",    [dc day]);
+    setOrNull("hour",   [dc hour]);
+    setOrNull("minute", [dc minute]);
+    setOrNull("second", [dc second]);
+    obj.Set(key, o);
+}
+
+static NSDateComponents* _jsToDateComponents(Napi::Object source, const char* key) {
+    if (!source.Has(key)) return nil;
+    Napi::Value v = source.Get(key);
+    if (v.IsNull() || !v.IsObject()) return nil;
+
+    Napi::Object o = v.As<Napi::Object>();
+    NSDateComponents* dc = [[NSDateComponents alloc] init];
+    auto get = [&](const char* k) -> NSInteger {
+        if (!o.Has(k)) return NSDateComponentUndefined;
+        Napi::Value vv = o.Get(k);
+        if (!vv.IsNumber()) return NSDateComponentUndefined;
+        return (NSInteger)vv.As<Napi::Number>().Int32Value();
+    };
+    [dc setYear:get("year")];
+    [dc setMonth:get("month")];
+    [dc setDay:get("day")];
+    [dc setHour:get("hour")];
+    [dc setMinute:get("minute")];
+    [dc setSecond:get("second")];
+    return [dc autorelease];
+}
+
+static Napi::Object _reminderToNapi(Napi::Env env, EKReminder* r) {
+    Napi::Object obj = Napi::Object::New(env);
+
+    obj.Set("calendar", _calendarToNapi(env, [r calendar]));
+
+    _setOrNull(obj, "title",                          [r title]);
+    _setOrNull(obj, "location",                       [r location]);
+    _setOrNull(obj, "notes",                          [r notes]);
+    _setOrNull(obj, "url",                            [[r URL] absoluteString]);
+    _setOrNull(obj, "timeZone",                       [[r timeZone] name]);
+    _setOrNull(obj, "calendarItemIdentifier",         [r calendarItemIdentifier]);
+    _setOrNull(obj, "calendarItemExternalIdentifier", [r calendarItemExternalIdentifier]);
+
+    _setDateOrNull(obj, "lastModifiedDate", [r lastModifiedDate]);
+    _setDateOrNull(obj, "creationDate",     [r creationDate]);
+    _setDateOrNull(obj, "completionDate",   [r completionDate]);
+
+    obj.Set("hasAlarms",          (bool)[r hasAlarms]);
+    obj.Set("hasRecurrenceRules", (bool)[r hasRecurrenceRules]);
+    obj.Set("completed",          (bool)[r completed]);
+    obj.Set("priority",           (int32_t)[r priority]);
+
+    _dateComponentsOrNull(obj, "startDateComponents", [r startDateComponents]);
+    _dateComponentsOrNull(obj, "dueDateComponents",   [r dueDateComponents]);
+
+    return obj;
+}
+
 // NSPredicate opaque handles. Manual retain/release (addon.mm is non-ARC).
 static Napi::External<NSPredicate> _predicateToExternal(Napi::Env env, NSPredicate* p) {
     [p retain];
@@ -110,6 +181,24 @@ static NSPredicate* _predicateFromExternal(Napi::Value v) {
         throw Napi::TypeError::New(v.Env(), "Expected NSPredicate handle");
     }
     return v.As<Napi::External<NSPredicate>>().Data();
+}
+
+// Resolve an array of { calendarIdentifier } JS objects into EKCalendar*.
+// Returns nil for non-array (treated as "all calendars" by Apple's predicate APIs).
+static NSArray<EKCalendar*>* _resolveCalendarsArg(Napi::Value v) {
+    if (!v.IsArray()) return nil;
+    Napi::Array arr = v.As<Napi::Array>();
+    NSMutableArray<EKCalendar*>* m = [NSMutableArray arrayWithCapacity:arr.Length()];
+    for (uint32_t i = 0; i < arr.Length(); i++) {
+        Napi::Value elem = arr[i];
+        if (!elem.IsObject()) continue;
+        Napi::Object calObj = elem.As<Napi::Object>();
+        if (!calObj.Has("calendarIdentifier")) continue;
+        std::string id = calObj.Get("calendarIdentifier").As<Napi::String>().Utf8Value();
+        EKCalendar* cal = [store calendarWithIdentifier:@(id.c_str())];
+        if (cal) [m addObject:cal];
+    }
+    return m;
 }
 
 // -----------------------------------------------------------------------------
@@ -229,6 +318,66 @@ static void _applyJsToEKEvent(Napi::Env env, EKEvent* target, Napi::Object sourc
             target.availability = (EKEventAvailability)v.As<Napi::Number>().Int32Value();
         }
     }
+}
+
+static void _applyJsToEKReminder(Napi::Env env, EKReminder* target, Napi::Object source) {
+    #define APPLY_STRING(key, expr) do { \
+        if (!source.Has(key)) break; \
+        Napi::Value _v = source.Get(key); \
+        if (_v.IsString())    (expr) = @(_v.As<Napi::String>().Utf8Value().c_str()); \
+        else if (_v.IsNull()) (expr) = nil; \
+    } while (0)
+
+    APPLY_STRING("title",    target.title);
+    APPLY_STRING("location", target.location);
+    APPLY_STRING("notes",    target.notes);
+
+    if (source.Has("url")) {
+        Napi::Value v = source.Get("url");
+        if (v.IsString())    target.URL = [NSURL URLWithString:@(v.As<Napi::String>().Utf8Value().c_str())];
+        else if (v.IsNull()) target.URL = nil;
+    }
+    if (source.Has("timeZone")) {
+        Napi::Value v = source.Get("timeZone");
+        if (v.IsString())    target.timeZone = [NSTimeZone timeZoneWithName:@(v.As<Napi::String>().Utf8Value().c_str())];
+        else if (v.IsNull()) target.timeZone = nil;
+    }
+
+    #undef APPLY_STRING
+
+    if (source.Has("calendar")) {
+        Napi::Value v = source.Get("calendar");
+        if (v.IsObject()) {
+            Napi::Object calObj = v.As<Napi::Object>();
+            if (calObj.Has("calendarIdentifier")) {
+                std::string id = calObj.Get("calendarIdentifier").As<Napi::String>().Utf8Value();
+                EKCalendar* cal = [store calendarWithIdentifier:@(id.c_str())];
+                if (cal) target.calendar = cal;
+            }
+        }
+    }
+
+    if (source.Has("priority")) {
+        Napi::Value v = source.Get("priority");
+        if (v.IsNumber()) target.priority = v.As<Napi::Number>().Int32Value();
+    }
+
+    if (source.Has("completed")) {
+        Napi::Value v = source.Get("completed");
+        if (v.IsBoolean()) target.completed = v.As<Napi::Boolean>().Value();
+    }
+
+    if (source.Has("completionDate")) {
+        Napi::Value v = source.Get("completionDate");
+        if (v.IsDate()) target.completionDate = [NSDate dateWithTimeIntervalSince1970:v.As<Napi::Date>().ValueOf() / 1000.0];
+        else if (v.IsNull()) target.completionDate = nil;
+    }
+
+    // Date-components fields: unconditional overwrite (deviates from
+    // the undefined→leave-unchanged convention used above; documented
+    // in vault/instructions/11 - Reminders.md Step 4).
+    target.startDateComponents = _jsToDateComponents(source, "startDateComponents");
+    target.dueDateComponents   = _jsToDateComponents(source, "dueDateComponents");
 }
 
 // -----------------------------------------------------------------------------
@@ -372,21 +521,7 @@ static Napi::Value PredicateForEvents(const Napi::CallbackInfo& info) {
     NSDate* startDate = [NSDate dateWithTimeIntervalSince1970:startMs / 1000.0];
     NSDate* endDate   = [NSDate dateWithTimeIntervalSince1970:endMs   / 1000.0];
 
-    NSArray<EKCalendar*>* cals = nil;
-    if (info[2].IsArray()) {
-        Napi::Array arr = info[2].As<Napi::Array>();
-        NSMutableArray<EKCalendar*>* m = [NSMutableArray arrayWithCapacity:arr.Length()];
-        for (uint32_t i = 0; i < arr.Length(); i++) {
-            Napi::Value elem = arr[i];
-            if (!elem.IsObject()) continue;
-            Napi::Object calObj = elem.As<Napi::Object>();
-            if (!calObj.Has("calendarIdentifier")) continue;
-            std::string id = calObj.Get("calendarIdentifier").As<Napi::String>().Utf8Value();
-            EKCalendar* cal = [store calendarWithIdentifier:@(id.c_str())];
-            if (cal) [m addObject:cal];
-        }
-        cals = m;
-    }
+    NSArray<EKCalendar*>* cals = _resolveCalendarsArg(info[2]);
 
     NSPredicate* p = [store predicateForEventsWithStartDate:startDate endDate:endDate calendars:cals];
     return _predicateToExternal(env, p);
@@ -543,6 +678,137 @@ static Napi::Value RefreshSourcesIfNecessary(const Napi::CallbackInfo& info) {
 }
 
 // -----------------------------------------------------------------------------
+// --------------------------------- Reminders ---------------------------------
+// -----------------------------------------------------------------------------
+
+struct FetchCtx {
+    Napi::Promise::Deferred deferred;
+    FetchCtx(Napi::Env env) : deferred(Napi::Promise::Deferred::New(env)) {}
+};
+
+struct FetchPayload {
+    NSArray<EKReminder*>* reminders;
+};
+
+static Napi::Value PredicateForReminders(const Napi::CallbackInfo& info) {
+    NSArray<EKCalendar*>* cals = _resolveCalendarsArg(info[0]);
+    NSPredicate* p = [store predicateForRemindersInCalendars:cals];
+    return _predicateToExternal(info.Env(), p);
+}
+
+static Napi::Value PredicateForCompletedReminders(const Napi::CallbackInfo& info) {
+    NSDate* start = info[0].IsDate()
+        ? [NSDate dateWithTimeIntervalSince1970:info[0].As<Napi::Date>().ValueOf() / 1000.0]
+        : nil;
+    NSDate* end = info[1].IsDate()
+        ? [NSDate dateWithTimeIntervalSince1970:info[1].As<Napi::Date>().ValueOf() / 1000.0]
+        : nil;
+    NSArray<EKCalendar*>* cals = _resolveCalendarsArg(info[2]);
+    NSPredicate* p = [store predicateForCompletedRemindersWithCompletionDateStarting:start
+                                                                              ending:end
+                                                                           calendars:cals];
+    return _predicateToExternal(info.Env(), p);
+}
+
+static Napi::Value PredicateForIncompleteReminders(const Napi::CallbackInfo& info) {
+    NSDate* start = info[0].IsDate()
+        ? [NSDate dateWithTimeIntervalSince1970:info[0].As<Napi::Date>().ValueOf() / 1000.0]
+        : nil;
+    NSDate* end = info[1].IsDate()
+        ? [NSDate dateWithTimeIntervalSince1970:info[1].As<Napi::Date>().ValueOf() / 1000.0]
+        : nil;
+    NSArray<EKCalendar*>* cals = _resolveCalendarsArg(info[2]);
+    NSPredicate* p = [store predicateForIncompleteRemindersWithDueDateStarting:start
+                                                                        ending:end
+                                                                     calendars:cals];
+    return _predicateToExternal(info.Env(), p);
+}
+
+static Napi::Value FetchReminders(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    NSPredicate* p = _predicateFromExternal(info[0]);
+
+    auto* ctx = new FetchCtx(env);
+    auto promise = ctx->deferred.Promise();
+
+    Napi::ThreadSafeFunction tsfn = Napi::ThreadSafeFunction::New(
+        env, Napi::Function(), "fetchReminders", 0, 1
+    );
+
+    [p retain];
+    [store fetchRemindersMatchingPredicate:p completion:^(NSArray<EKReminder*>* reminders) {
+        FetchPayload* payload = new FetchPayload{ [reminders retain] };
+        tsfn.BlockingCall(payload, [ctx](Napi::Env env, Napi::Function, FetchPayload* pl) {
+            Napi::Array arr = Napi::Array::New(env, [pl->reminders count]);
+            for (NSUInteger i = 0; i < [pl->reminders count]; i++) {
+                arr[i] = _reminderToNapi(env, pl->reminders[i]);
+            }
+            ctx->deferred.Resolve(arr);
+            [pl->reminders release];
+            delete pl;
+            delete ctx;
+        });
+        tsfn.Release();
+        [p release];
+    }];
+
+    return promise;
+}
+
+static Napi::Value SaveReminder(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::Object reminderObj = info[0].As<Napi::Object>();
+    bool commitFlag = info[1].As<Napi::Boolean>().Value();
+
+    EKReminder* ekReminder = nil;
+    if (reminderObj.Has("calendarItemIdentifier")) {
+        Napi::Value v = reminderObj.Get("calendarItemIdentifier");
+        if (v.IsString()) {
+            std::string id = v.As<Napi::String>().Utf8Value();
+            EKCalendarItem* item = [store calendarItemWithIdentifier:@(id.c_str())];
+            if ([item isKindOfClass:[EKReminder class]]) ekReminder = (EKReminder*)item;
+        }
+    }
+    if (ekReminder == nil) {
+        ekReminder = [EKReminder reminderWithEventStore:store];
+    }
+
+    _applyJsToEKReminder(env, ekReminder, reminderObj);
+
+    NSError* error = nil;
+    BOOL ok = [store saveReminder:ekReminder commit:commitFlag error:&error];
+    if (!ok) {
+        const char* msg = error ? [[error localizedDescription] UTF8String] : "saveReminder failed";
+        throw Napi::Error::New(env, msg);
+    }
+    return Napi::String::New(env, [[ekReminder calendarItemIdentifier] UTF8String]);
+}
+
+static Napi::Value RemoveReminder(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::Object reminderObj = info[0].As<Napi::Object>();
+    bool commitFlag = info[1].As<Napi::Boolean>().Value();
+
+    if (!reminderObj.Has("calendarItemIdentifier") || !reminderObj.Get("calendarItemIdentifier").IsString()) {
+        throw Napi::TypeError::New(env, "remove requires reminder with calendarItemIdentifier");
+    }
+    std::string id = reminderObj.Get("calendarItemIdentifier").As<Napi::String>().Utf8Value();
+    EKCalendarItem* item = [store calendarItemWithIdentifier:@(id.c_str())];
+    if (![item isKindOfClass:[EKReminder class]]) {
+        throw Napi::Error::New(env, "reminder not found");
+    }
+    EKReminder* ekReminder = (EKReminder*)item;
+
+    NSError* error = nil;
+    BOOL ok = [store removeReminder:ekReminder commit:commitFlag error:&error];
+    if (!ok) {
+        const char* msg = error ? [[error localizedDescription] UTF8String] : "removeReminder failed";
+        throw Napi::Error::New(env, msg);
+    }
+    return env.Undefined();
+}
+
+// -----------------------------------------------------------------------------
 // --------------------------------- Node-API ----------------------------------
 // -----------------------------------------------------------------------------
 
@@ -568,6 +834,12 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("commit",                          Napi::Function::New(env, Commit));
     exports.Set("reset",                           Napi::Function::New(env, Reset));
     exports.Set("refreshSourcesIfNecessary",       Napi::Function::New(env, RefreshSourcesIfNecessary));
+    exports.Set("predicateForReminders",            Napi::Function::New(env, PredicateForReminders));
+    exports.Set("predicateForCompletedReminders",   Napi::Function::New(env, PredicateForCompletedReminders));
+    exports.Set("predicateForIncompleteReminders",  Napi::Function::New(env, PredicateForIncompleteReminders));
+    exports.Set("fetchReminders",                   Napi::Function::New(env, FetchReminders));
+    exports.Set("saveReminder",                     Napi::Function::New(env, SaveReminder));
+    exports.Set("removeReminder",                   Napi::Function::New(env, RemoveReminder));
     return exports;
 }
 

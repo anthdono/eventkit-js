@@ -40,16 +40,16 @@ Declared in `src/EKEventStore.ts`. Mirrors [EKEventStore](https://developer.appl
 | `calendarItems(withExternalIdentifier)` | 🟡 | Phase 6 (orphan calendar-item reads) |
 | `enumerateEvents(matching, block): Promise<void>` | ✅ | — |
 | `eventsMatchingPredicate(matching)` | ✅ | — |
-| `fetchReminders(matching, options?): Promise<EKReminder[]>` | 🟡 | [[../vault/instructions/11 - Reminders]] |
+| `fetchReminders(matching, options?): Promise<EKReminder[]>` | ✅ | — |
 | `cancelFetchRequest(id)` | 🟡 | superseded by `AbortSignal` per [[../vault/planning/Async & Completion Handlers]]; stays `NotImplemented` |
 | `predicateForEvents(start, end, calendars)` | ✅ | — |
-| `predicateForReminders(inCalendars)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
-| `predicateForCompletedReminders(start, end, calendars)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
-| `predicateForIncompleteReminders(start, end, calendars)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
+| `predicateForReminders(inCalendars)` | ✅ | — |
+| `predicateForCompletedReminders(start, end, calendars)` | ✅ | — |
+| `predicateForIncompleteReminders(start, end, calendars)` | ✅ | — |
 | `save(event, span[, commit])` | ✅ | — |
-| `save(reminder, commit)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
+| `save(reminder, commit)` | ✅ | — |
 | `remove(event, span[, commit])` | ✅ | — |
-| `remove(reminder, commit)` | 🟡 | [[../vault/instructions/11 - Reminders]] |
+| `remove(reminder, commit)` | ✅ | — |
 
 ### Getters
 
@@ -121,11 +121,48 @@ Explicitly deferred (scheduled for later phases):
 - `CGColor` — expose as hex string `"#RRGGBB"` when Phase 6 (calendar CRUD) needs it.
 - `allowedEntityTypes` bitmask — defer until a consumer asks.
 
-## EKReminder, NSPredicate
+## EKReminder
 
-Empty shells as of 2026-04-24 (`src/EKReminder.ts`, `src/NSPredicate.ts`). `NSPredicate` is wired as an opaque native-handle class (populated by `predicateForEvents` in Phase 3) but carries no TS-side fields. Scheduled to grow in the phase where their first consumer lands:
-- `NSPredicate` → still minimal; revisit if a consumer needs introspection (no near-term phase owner).
-- `EKReminder` → Phase 5 (reminders).
+Declared in `src/EKReminder.ts`. Populated by `_reminderToNapi` in the native layer.
+
+| Property | Type | Populated | Notes |
+|---|---|---|---|
+| `calendar` | `EKCalendar` | ✅ | via nested `_calendarToNapi` |
+| `title` | `string` | ✅ | |
+| `location` | `string \| null` | ✅ | |
+| `notes` | `string \| null` | ✅ | |
+| `url` | `string \| null` | ✅ | `[[reminder URL] absoluteString]` |
+| `timeZone` | `string \| null` | ✅ | `[[reminder timeZone] name]` |
+| `lastModifiedDate` | `Date \| null` | ✅ | |
+| `creationDate` | `Date \| null` | ✅ | |
+| `hasAlarms` | `boolean` | ✅ | |
+| `hasRecurrenceRules` | `boolean` | ✅ | |
+| `calendarItemIdentifier` | `string` | ✅ | EKCalendarItem identifier |
+| `calendarItemExternalIdentifier` | `string \| null` | ✅ | |
+| `completed` | `boolean` | ✅ | |
+| `completionDate` | `Date \| null` | ✅ | |
+| `priority` | `number` | ✅ | Apple integer 0–9 (0 = none) |
+| `startDateComponents` | `DateComponents \| null` | ✅ | |
+| `dueDateComponents` | `DateComponents \| null` | ✅ | |
+
+`DateComponents` (interface, not const-object enum):
+
+```ts
+interface DateComponents {
+    year: number | null;
+    month: number | null;
+    day: number | null;
+    hour: number | null;
+    minute: number | null;
+    second: number | null;
+}
+```
+
+Loss-less mapping of Apple's `NSDateComponents` (which uses `NSDateComponentUndefined` for unset fields). Reminders may be "someday" (year/month only), "by tomorrow" (year/month/day), or "by 5pm" (full datetime); `DateComponents` preserves all three.
+
+## NSPredicate
+
+Declared in `src/NSPredicate.ts`. Empty shell — opaque native-handle class wired via `napi_external` (created by `predicateForEvents` / `predicateForReminders*`, consumed by `eventsMatchingPredicate` / `enumerateEvents` / `fetchReminders`). No TS-side fields; revisit if a consumer needs introspection.
 
 ---
 
@@ -144,6 +181,7 @@ Declared in `src/EKCalendarItem.ts`. Has one property (`calendar: EKCalendar`) a
 | `EKSpan` | `src/EKSpan.ts` | const object + `typeof` | `"thisEvent"`, `"futureEvents"` |
 | `EKAuthorizationStatus` | `src/EKAuthorizationStatus.ts` | const object + `typeof` | `"fullAccess"`, `"writeOnly"`, `"denied"`, `"notDetermined"`, `"restricted"` |
 | `EKCalendarType` | `src/EKCalendarType.ts` | const object + `typeof` | `"Local"`, `"CalDAV"`, `"Exchange"`, `"Subscription"`, `"Birthday"` |
+| `DateComponents` | `src/EKReminder.ts` | **interface** (not const-object) | shape: `{ year, month, day, hour, minute, second }`, each `number \| null` |
 
 Convention rationale: see [[../vault/planning/TypeScript API Conventions]].
 
@@ -157,4 +195,4 @@ Declared in `src/NotImplemented.ts`. Error subclass thrown from every 🟡 metho
 grep -cE '^[[:space:]]+throw new NotImplemented' src/EKEventStore.ts
 ```
 
-Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **13** as of 2026-04-24 (down from 14 after the events-write wire-up in [[../vault/instructions/09 - Events Write]]; note the two `save`/`remove` reminder-path branches each still contain a `throw new NotImplemented` until Phase 5).
+Counts only active (non-commented) throws and should equal the number of 🟡 rows in the `EKEventStore` section above — currently **7** as of 2026-04-27 (down from 13 after Phase 5 in [[../vault/instructions/11 - Reminders]]; the residual seven include `init(sources)`, `delegateSources`, `cancelFetchRequest` (intentionally NotImplemented per the AbortSignal supersession), `calendarItem`, `calendarItems`, `saveCalendar`, `removeCalendar`).
