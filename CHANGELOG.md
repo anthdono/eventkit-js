@@ -5,9 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] — 2026-04-27
+## [2.0.0] — 2026-04-27
 
-Initial public release. Pre-1.0 work was internal-only and is not part of this version history.
+Initial public release of this codebase. Pre-2.0 work was internal-only and is not part of this version history.
+
+(Versioning note: an unrelated `eventkit-js@1.0.0` was previously published from a different codebase under the same maintainer. This release ships as `2.0.0` to avoid colliding with that version on the npm registry.)
 
 ### Added
 
@@ -32,4 +34,4 @@ Initial public release. Pre-1.0 work was internal-only and is not part of this v
 - `request*Access*` methods are macOS 14+ only; older macOS throws synchronously.
 - Single static `EKEventStore` per process; multi-instance support deferred.
 
-[1.0.0]: https://github.com/anthdono/eventkit-js/releases/tag/v1.0.0
+[2.0.0]: https://github.com/anthdono/eventkit-js/releases/tag/v2.0.0
