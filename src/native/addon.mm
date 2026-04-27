@@ -1639,6 +1639,12 @@ struct ChangeSubscription {
 static std::vector<ChangeSubscription*> activeSubscriptions;
 static std::mutex subscriptionsMutex;
 static id changeObserver = nil;
+// Private NSOperationQueue. NSNotificationCenter delivery on `queue:nil`
+// requires a CFRunLoop iteration to fire the block; Node.js doesn't pump
+// Apple's run loop, so the block would never run. A private operation
+// queue spins up its own worker thread and delivers independently of any
+// run loop. Lazily allocated; persists for process lifetime.
+static NSOperationQueue* changeNotifyQueue = nil;
 static std::atomic<uint64_t> nextSubscriptionId{1};
 
 static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
@@ -1663,10 +1669,14 @@ static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
 
         // First subscriber: register the NSNotificationCenter observer.
         if (changeObserver == nil) {
+            if (changeNotifyQueue == nil) {
+                changeNotifyQueue = [[NSOperationQueue alloc] init];
+                [changeNotifyQueue setName:@"eventkit-js.changeNotify"];
+            }
             changeObserver = [[[NSNotificationCenter defaultCenter]
                 addObserverForName:EKEventStoreChangedNotification
                             object:nil
-                             queue:nil
+                             queue:changeNotifyQueue
                         usingBlock:^(NSNotification* /*n*/) {
                 std::lock_guard<std::mutex> innerLock(subscriptionsMutex);
                 for (auto* s : activeSubscriptions) {

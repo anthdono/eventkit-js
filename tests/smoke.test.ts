@@ -222,14 +222,22 @@ if (!isMac) {
                     calendar:  cal,
                 }, 0, true);
 
+                let timer: NodeJS.Timeout;
                 try {
                     await Promise.race([
                         fired,
-                        new Promise<void>((_, rej) =>
-                            setTimeout(() => rej(new Error("'change' not fired in 5s")), 5000)
-                        ),
+                        new Promise<void>((_, rej) => {
+                            timer = setTimeout(
+                                () => rej(new Error("'change' not fired in 5s")),
+                                5000,
+                            );
+                        }),
                     ]);
                 } finally {
+                    // @ts-ignore — assigned in race, may be undefined on early reject
+                    if (timer) clearTimeout(timer);
+                    // Ensure no stray listener / native subscription survives the test.
+                    store.removeAllListeners("change");
                     const fetched: any = store.event(id);
                     if (fetched) {
                         // eslint-disable-next-line @typescript-eslint/no-var-requires
