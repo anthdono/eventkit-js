@@ -1370,7 +1370,9 @@ static Napi::Value SaveEvent(const Napi::CallbackInfo& info) {
     _applyJsToEKEvent(env, ekEvent, eventObj);
 
     NSError* error = nil;
+    fprintf(stderr, "[eventkit-js] saveEvent: about to call [store saveEvent:span:commit:%d]\n", (int)commitFlag);
     BOOL ok = [store saveEvent:ekEvent span:span commit:commitFlag error:&error];
+    fprintf(stderr, "[eventkit-js] saveEvent: returned ok=%d\n", (int)ok);
     if (!ok) {
         throw _napiErrorFromNSError(env, error, "saveEvent failed");
     }
@@ -1678,12 +1680,12 @@ static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
                             object:nil
                              queue:changeNotifyQueue
                         usingBlock:^(NSNotification* /*n*/) {
+                fprintf(stderr, "[eventkit-js] EKEventStoreChangedNotification fired\n");
                 std::lock_guard<std::mutex> innerLock(subscriptionsMutex);
+                fprintf(stderr, "[eventkit-js]   subscribers: %zu\n", activeSubscriptions.size());
                 for (auto* s : activeSubscriptions) {
-                    // NonBlockingCall: drop on backpressure rather than
-                    // stall the NSNotificationCenter thread. Change events
-                    // are coalesce-able — consumer just refetches latest.
-                    s->tsfn.NonBlockingCall();
+                    napi_status r = s->tsfn.NonBlockingCall();
+                    fprintf(stderr, "[eventkit-js]   tsfn.NonBlockingCall = %d\n", (int)r);
                 }
             }] retain];
         }

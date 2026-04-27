@@ -207,7 +207,7 @@ if (!isMac) {
         // that creating an event via the addon fires a 'change' notification within
         // a few seconds. NSNotificationCenter timing is at Apple's discretion.
         (process.env.TEST_CALENDAR_ID ? it : it.skip)(
-            "emits 'change' when an event is saved (manual)",
+            "emits 'change' when an event is saved (manual) — 30s budget",
             async () => {
                 const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
                 expect(cal).not.toBeNull();
@@ -228,8 +228,8 @@ if (!isMac) {
                         fired,
                         new Promise<void>((_, rej) => {
                             timer = setTimeout(
-                                () => rej(new Error("'change' not fired in 5s")),
-                                5000,
+                                () => rej(new Error("'change' not fired in 25s")),
+                                25000,
                             );
                         }),
                     ]);
@@ -245,7 +245,8 @@ if (!isMac) {
                         store.remove(fetched, EKSpan.THIS_EVENT);
                     }
                 }
-            }
+            },
+            30000  // overall jest timeout for this test
         );
 
         it("predicateForReminders returns an opaque handle", () => {
