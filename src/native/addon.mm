@@ -550,6 +550,11 @@ static EKAlarmProximity _stringToEKAlarmProximity(Napi::Env env, const std::stri
     throw Napi::Error::New(env, std::string("Unknown EKAlarmProximity: ") + s);
 }
 
+// Forward declarations — _structuredLocationToNapi / _jsToStructuredLocation
+// are defined further down but used by the alarm marshallers here.
+static Napi::Value _structuredLocationToNapi(Napi::Env env, EKStructuredLocation* loc);
+static EKStructuredLocation* _jsToStructuredLocation(Napi::Env env, Napi::Value source);
+
 static Napi::Object _alarmToNapi(Napi::Env env, EKAlarm* a) {
     Napi::Object obj = Napi::Object::New(env);
 
@@ -569,13 +574,7 @@ static Napi::Object _alarmToNapi(Napi::Env env, EKAlarm* a) {
     obj.Set("type",      _ekAlarmTypeToString([a type]));
     obj.Set("proximity", _ekAlarmProximityToString([a proximity]));
 
-    // Shallow proxy until instruction 16 lands.
-    EKStructuredLocation* sl = [a structuredLocation];
-    if (sl != nil && [sl title] != nil) {
-        obj.Set("structuredLocation", [[sl title] UTF8String]);
-    } else {
-        obj.Set("structuredLocation", env.Null());
-    }
+    obj.Set("structuredLocation", _structuredLocationToNapi(env, [a structuredLocation]));
 
     _setOrNull(obj, "emailAddress", [a emailAddress]);
     _setOrNull(obj, "soundName",    [a soundName]);
@@ -649,7 +648,15 @@ static EKAlarm* _jsToEKAlarm(Napi::Env env, Napi::Object source) {
     // EKAlarm.url is deprecated by Apple (procedure alarms removed in 10.9);
     // intentionally not recognised on the write path.
     // type is read-only on EKAlarm — derived from which fields are set.
-    // structuredLocation: deferred to instruction 16.
+
+    if (source.Has("structuredLocation")) {
+        Napi::Value v = source.Get("structuredLocation");
+        if (v.IsNull()) {
+            a.structuredLocation = nil;
+        } else if (v.IsObject()) {
+            a.structuredLocation = _jsToStructuredLocation(env, v);
+        }
+    }
 
     return a;
 }

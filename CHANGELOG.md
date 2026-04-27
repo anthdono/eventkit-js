@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] — 2026-04-27
+
+Closes the last shallow-proxy field on the public surface. `EKAlarm.structuredLocation` was deferred to a string proxy when alarms shipped in 3.0.0 (the comment said "deepens when instruction 16 ships" — instruction 16 deepened the field on `EKEvent` but missed the alarm one). 3.2.0 finishes the job.
+
+### Changed (technically breaking — see migration note below)
+
+- `EKAlarm.structuredLocation` is now `EKStructuredLocation | null` (was `string | null` carrying the location title only). Read + write are symmetric — pass the full shape on save and you get the full shape on fetch. The geofence (`proximity: "enter" | "leave"`) plus the new `radius` field together let consumers build location-triggered alarms without a separate Apple-specific dance.
+
+### Migration
+
+Strict semver would call this 4.0.0 — it's a public field type change. In practice the field was an explicitly-shallow proxy that no consumer should have been treating as load-bearing (the `EKAlarm` doc-comment flagged it as deferred). Migration is small:
+
+```diff
+- console.log(alarm.structuredLocation);              // string | null (title only)
++ console.log(alarm.structuredLocation?.title);       // EKStructuredLocation | null
++ console.log(alarm.structuredLocation?.geoLocation); // newly first-class
+```
+
+If you were constructing alarms with `structuredLocation: "Home"`, switch to:
+
+```diff
+- alarm.structuredLocation = "Home";
++ alarm.structuredLocation = { title: "Home", geoLocation: null, radius: 0 };
+```
+
 ## [3.1.0] — 2026-04-27
 
 Phase 7 batch — operationalisation and developer-experience polish on top of 3.0.1. CI on macOS, full migration guide and README quickstart, the last two read-side `NotImplemented` stubs (`calendarItem` / `calendarItems`) wired, async sibling for `eventsMatchingPredicate`, ARC adoption in the native addon, and round-trip test coverage backfilled for every Phase 6 feature. No breaking changes.

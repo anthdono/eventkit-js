@@ -244,7 +244,7 @@ Declared in `src/EKAlarm.ts` (interface, not class — alarms are pure data). Re
 | `absoluteDate` | `Date \| null` | absolute trigger; `null` when `relativeOffset` is set |
 | `type` | `EKAlarmType` | `"display" \| "audio" \| "procedure" \| "email"`; read-only on Apple — derived from which fields are set |
 | `proximity` | `EKAlarmProximity` | `"none" \| "enter" \| "leave"` — geofence direction for location alarms |
-| `structuredLocation` | `string \| null` | shallow proxy: `location.title`. Deepens to full `EKStructuredLocation` when instruction 16 ships. |
+| `structuredLocation` | `EKStructuredLocation \| null` | full shape via `_structuredLocationToNapi` (`title`, `geoLocation: {latitude, longitude}`, `radius`). Read + write. Deepened from a string proxy in 3.2.0. |
 | `emailAddress` | `string \| null` | for `type: "email"` alarms |
 | `soundName` | `string \| null` | for `type: "audio"` alarms |
 

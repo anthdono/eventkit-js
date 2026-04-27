@@ -526,6 +526,60 @@ if (!isMac) {
                 }
             });
 
+        // Manual-only: alarm.structuredLocation as full EKStructuredLocation
+        // (deepened in 3.2.0; was a string proxy before).
+        (process.env.TEST_CALENDAR_ID ? it : it.skip)(
+            "alarm.structuredLocation round-trips with full EKStructuredLocation shape (manual)",
+            () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKSpan } = require("../src/EKSpan");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKAlarmType } = require("../src/EKAlarmType");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { EKAlarmProximity } = require("../src/EKAlarmProximity");
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const addon = require("../build/Release/addon");
+                const cal = store.calendar(process.env.TEST_CALENDAR_ID!);
+
+                const createdId: string = addon.saveEvent({
+                    title: "eventkit-js alarm-loc test (delete me)",
+                    startDate: new Date(Date.now() + 60_000),
+                    endDate:   new Date(Date.now() + 120_000),
+                    calendar:  cal,
+                    alarms: [
+                        {
+                            relativeOffset: 0,
+                            absoluteDate:   null,
+                            type:           EKAlarmType.DISPLAY,
+                            proximity:      EKAlarmProximity.ENTER,
+                            structuredLocation: {
+                                title: "Home",
+                                geoLocation: { latitude: 37.78, longitude: -122.41 },
+                                radius: 100,
+                            },
+                            emailAddress:   null,
+                            soundName:      null,
+                        },
+                    ],
+                }, 0, true);
+                try {
+                    const fetched: any = store.event(createdId);
+                    expect(fetched).not.toBeNull();
+                    expect(fetched.alarms.length).toBe(1);
+                    const sl = fetched.alarms[0].structuredLocation;
+                    expect(sl).not.toBeNull();
+                    expect(typeof sl).toBe("object");
+                    expect(sl.title).toBe("Home");
+                    expect(sl.geoLocation).not.toBeNull();
+                    expect(sl.geoLocation.latitude).toBeCloseTo(37.78, 4);
+                    expect(sl.geoLocation.longitude).toBeCloseTo(-122.41, 4);
+                    expect(sl.radius).toBe(100);
+                } finally {
+                    const f: any = store.event(createdId);
+                    if (f) store.remove(f, EKSpan.THIS_EVENT);
+                }
+            });
+
         // Manual-only: structured location with geo coordinates + radius.
         (process.env.TEST_CALENDAR_ID ? it : it.skip)(
             "structured location with geoLocation + radius round-trips (manual)",

@@ -6,6 +6,7 @@
 
 import { EKAlarmType } from "./EKAlarmType";
 import { EKAlarmProximity } from "./EKAlarmProximity";
+import { EKStructuredLocation } from "./EKStructuredLocation";
 
 export interface EKAlarm {
     // Trigger — exactly one is non-null.
@@ -15,9 +16,7 @@ export interface EKAlarm {
     type: EKAlarmType;
     proximity: EKAlarmProximity;
 
-    // Shallow proxy for now — `structuredLocation.title`. Deepens to the
-    // full EKStructuredLocation shape when instruction 16 ships.
-    structuredLocation: string | null;
+    structuredLocation: EKStructuredLocation | null;
 
     emailAddress: string | null;
     soundName: string | null;
