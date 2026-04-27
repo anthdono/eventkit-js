@@ -13,7 +13,8 @@
       "xcode_settings": {
         "OTHER_LDFLAGS": [ "-framework", "EventKit", "-framework", "CoreGraphics", "-framework", "CoreLocation" ],
         "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
-        "CLANG_CXX_LANGUAGE_STANDARD": "c++17"
+        "CLANG_CXX_LANGUAGE_STANDARD": "c++17",
+        "CLANG_ENABLE_OBJC_ARC": "YES"
       }
     }
   ]

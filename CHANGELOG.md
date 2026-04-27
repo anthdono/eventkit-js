@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Round-trip coverage added for: recurrence rules (`WEEKLY` with `daysOfTheWeek`), alarms (relative + absolute together), structured location with `geoLocation` + `radius`, `event.availability`, calendar create/mutate/remove with `color`. One unconditional test asserts that saving into a read-only calendar throws `EKError` with one of the read-only-family codes.
 
+### Internal
+
+- Native addon (`src/native/addon.mm`) now compiles under ARC (`CLANG_ENABLE_OBJC_ARC: YES` in `binding.gyp`). All 13 manual `retain` / `release` / `autorelease` sites converted: `__strong` qualifiers on the C++ payload structs that carry Obj-C objects across the threadsafe-function boundary; `__bridge_retained` / `__bridge_transfer` for the `NSPredicate` `napi_external` opaque handle and the `NSError` cross-thread hop in `request*Access*`; block-capture for the predicate held across `dispatch_async`; static `__strong` semantics for the `NSNotificationCenter` observer. Behaviour-preserving — verified by the existing 38-test suite.
+
 ## [3.0.1] — 2026-04-27
 
 Patch release. **Use this instead of 3.0.0** — the 3.0.0 tarball on npm was published from an intermediate diagnostic commit and emits `[eventkit-js] …` stderr noise on every save plus has a partially-broken change-notification path. Functionally usable but not what was intended; corrected here.

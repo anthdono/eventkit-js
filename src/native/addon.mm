@@ -508,7 +508,7 @@ static EKRecurrenceRule* _jsToEKRecurrenceRule(Napi::Env env, Napi::Object sourc
         }
     }
 
-    EKRecurrenceRule* rule = [[EKRecurrenceRule alloc]
+    return [[EKRecurrenceRule alloc]
         initRecurrenceWithFrequency:frequency
                            interval:interval
                       daysOfTheWeek:daysOfTheWeek
@@ -518,7 +518,6 @@ static EKRecurrenceRule* _jsToEKRecurrenceRule(Napi::Env env, Napi::Object sourc
                       daysOfTheYear:daysOfTheYear
                        setPositions:setPositions
                                 end:end];
-    return [rule autorelease];
 }
 
 // -----------------------------------------------------------------------------
@@ -720,10 +719,9 @@ static EKStructuredLocation* _jsToStructuredLocation(Napi::Env env, Napi::Value 
                 Napi::Value latV = g.Get("latitude");
                 Napi::Value lngV = g.Get("longitude");
                 if (latV.IsNumber() && lngV.IsNumber()) {
-                    CLLocation* loc = [[[CLLocation alloc]
+                    sl.geoLocation = [[CLLocation alloc]
                         initWithLatitude:latV.As<Napi::Number>().DoubleValue()
-                               longitude:lngV.As<Napi::Number>().DoubleValue()] autorelease];
-                    sl.geoLocation = loc;
+                               longitude:lngV.As<Napi::Number>().DoubleValue()];
                 }
             }
         }
@@ -817,7 +815,7 @@ static NSDateComponents* _jsToDateComponents(Napi::Object source, const char* ke
     [dc setHour:get("hour")];
     [dc setMinute:get("minute")];
     [dc setSecond:get("second")];
-    return [dc autorelease];
+    return dc;
 }
 
 static Napi::Object _reminderToNapi(Napi::Env env, EKReminder* r) {
@@ -850,11 +848,13 @@ static Napi::Object _reminderToNapi(Napi::Env env, EKReminder* r) {
     return obj;
 }
 
-// NSPredicate opaque handles. Manual retain/release (addon.mm is non-ARC).
-static Napi::External<NSPredicate> _predicateToExternal(Napi::Env env, NSPredicate* p) {
-    [p retain];
-    return Napi::External<NSPredicate>::New(env, p, [](Napi::Env, NSPredicate* q) {
-        [q release];
+// NSPredicate opaque handles. ARC: __bridge_retained transfers +1 to a raw
+// void* the napi_external can hold; __bridge_transfer in the finalizer
+// returns ownership to ARC, which autoreleases.
+static Napi::External<void> _predicateToExternal(Napi::Env env, NSPredicate* p) {
+    void* opaque = (__bridge_retained void*) p;
+    return Napi::External<void>::New(env, opaque, [](Napi::Env, void* o) {
+        if (o) (void)(__bridge_transfer NSPredicate*) o;
     });
 }
 
@@ -862,7 +862,8 @@ static NSPredicate* _predicateFromExternal(Napi::Value v) {
     if (!v.IsExternal()) {
         throw Napi::TypeError::New(v.Env(), "Expected NSPredicate handle");
     }
-    return v.As<Napi::External<NSPredicate>>().Data();
+    // Borrowed reference — caller doesn't own; finalizer holds the +1.
+    return (__bridge NSPredicate*) v.As<Napi::External<void>>().Data();
 }
 
 // Resolve an array of { calendarIdentifier } JS objects into EKCalendar*.
@@ -905,16 +906,15 @@ static Napi::Value _runAccessRequest(
     );
 
     invokeRequest(^(BOOL granted, NSError* error) {
-        // Capture the NSError onto the heap so the V8-thread lambda can
-        // build a structured EKError from it. Retained here, released on
-        // the V8 thread after _napiErrorFromNSError reads it.
-        NSError* capturedError = error ? [error retain] : nil;
+        // Transfer the NSError +1 across the C++ lambda boundary explicitly
+        // so ARC tracks it through the tsfn hop.
+        void* errPtr = error ? (__bridge_retained void*) error : nullptr;
 
-        tsfn.BlockingCall([ctx, granted, capturedError](Napi::Env env, Napi::Function) {
-            if (capturedError != nil) {
-                Napi::Error err = _napiErrorFromNSError(env, capturedError, "access request failed");
-                ctx->deferred.Reject(err.Value());
-                [capturedError release];
+        tsfn.BlockingCall([ctx, granted, errPtr](Napi::Env env, Napi::Function) {
+            NSError* err = errPtr ? (__bridge_transfer NSError*) errPtr : nil;
+            if (err != nil) {
+                Napi::Error e = _napiErrorFromNSError(env, err, "access request failed");
+                ctx->deferred.Reject(e.Value());
             } else {
                 ctx->deferred.Resolve(Napi::Boolean::New(env, (bool)granted));
             }
@@ -1162,7 +1162,7 @@ struct EnumerateState {
 };
 
 struct EventPayload {
-    EKEvent* event;
+    EKEvent* __strong event;
 };
 
 // -----------------------------------------------------------------------------
@@ -1361,18 +1361,17 @@ static Napi::Value EnumerateEvents(const Napi::CallbackInfo& info) {
         }
     );
 
-    [p retain];
-
+    // ARC: the dispatch block strongly captures `p`; the EventPayload struct's
+    // __strong field retains each enumerated event until `delete pl` fires.
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [store enumerateEventsMatchingPredicate:p usingBlock:^(EKEvent *ev, BOOL *stop) {
             if (state->aborted.load()) {
                 *stop = YES;
                 return;
             }
-            EventPayload* payload = new EventPayload{ [ev retain] };
+            EventPayload* payload = new EventPayload{ ev };
             tsfn.BlockingCall(payload, [state](Napi::Env env, Napi::Function, EventPayload* pl) {
                 if (state->aborted.load()) {
-                    [pl->event release];
                     delete pl;
                     return;
                 }
@@ -1383,12 +1382,10 @@ static Napi::Value EnumerateEvents(const Napi::CallbackInfo& info) {
                     state->errorRef = Napi::Persistent(static_cast<Napi::Value>(e.Value()));
                     state->aborted.store(true);
                 }
-                [pl->event release];
                 delete pl;
             });
         }];
         tsfn.Release();
-        [p release];
     });
 
     return promise;
@@ -1481,7 +1478,7 @@ struct FetchCtx {
 };
 
 struct FetchPayload {
-    NSArray<EKReminder*>* reminders;
+    NSArray<EKReminder*>* __strong reminders;
 };
 
 static Napi::Value PredicateForReminders(const Napi::CallbackInfo& info) {
@@ -1529,21 +1526,20 @@ static Napi::Value FetchReminders(const Napi::CallbackInfo& info) {
         env, Napi::Function(), "fetchReminders", 0, 1
     );
 
-    [p retain];
+    // ARC: the completion block strongly captures `p` and `reminders`;
+    // FetchPayload's __strong field retains the array until delete pl.
     [store fetchRemindersMatchingPredicate:p completion:^(NSArray<EKReminder*>* reminders) {
-        FetchPayload* payload = new FetchPayload{ [reminders retain] };
+        FetchPayload* payload = new FetchPayload{ reminders };
         tsfn.BlockingCall(payload, [ctx](Napi::Env env, Napi::Function, FetchPayload* pl) {
             Napi::Array arr = Napi::Array::New(env, [pl->reminders count]);
             for (NSUInteger i = 0; i < [pl->reminders count]; i++) {
                 arr[i] = _reminderToNapi(env, pl->reminders[i]);
             }
             ctx->deferred.Resolve(arr);
-            [pl->reminders release];
             delete pl;
             delete ctx;
         });
         tsfn.Release();
-        [p release];
     }];
 
     return promise;
@@ -1726,7 +1722,10 @@ static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
                 changeNotifyQueue = [[NSOperationQueue alloc] init];
                 [changeNotifyQueue setName:@"eventkit-js.changeNotify"];
             }
-            changeObserver = [[[NSNotificationCenter defaultCenter]
+            // ARC: assignment to the static __strong `changeObserver`
+            // retains the returned token; clearing to nil in unsubscribe
+            // releases it.
+            changeObserver = [[NSNotificationCenter defaultCenter]
                 addObserverForName:EKEventStoreChangedNotification
                             object:nil
                              queue:changeNotifyQueue
@@ -1738,7 +1737,7 @@ static Napi::Value SubscribeChange(const Napi::CallbackInfo& info) {
                     // are coalesce-able — consumer just refetches latest.
                     s->tsfn.NonBlockingCall();
                 }
-            }] retain];
+            }];
         }
     }
 
@@ -1765,7 +1764,6 @@ static Napi::Value UnsubscribeChange(const Napi::CallbackInfo& info) {
     // Last subscriber: deregister the NSNotificationCenter observer.
     if (activeSubscriptions.empty() && changeObserver != nil) {
         [[NSNotificationCenter defaultCenter] removeObserver:changeObserver];
-        [changeObserver release];
         changeObserver = nil;
     }
 
