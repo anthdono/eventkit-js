@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [development]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build (node ${{ matrix.node }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Cache node-gyp downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/node-gyp
+          key: ${{ runner.os }}-node-gyp-${{ matrix.node }}
+          restore-keys: |
+            ${{ runner.os }}-node-gyp-
+
+      - name: Install dependencies (rebuilds native addon via install hook)
+        run: npm ci
+
+      - name: Compile TypeScript
+        run: npm run build:ts
+
+      - name: Run tests
+        run: npm test
+        env:
+          CI: "true"
+
+      - name: Upload native addon artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-node${{ matrix.node }}
+          path: build/Release/addon.node
+          if-no-files-found: warn
+          retention-days: 7
