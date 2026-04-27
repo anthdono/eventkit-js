@@ -8,3 +8,4 @@ log
 diff
 .env
 .env.local
+vault/
