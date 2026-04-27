@@ -17,6 +17,18 @@ if (!isMac) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { EKCalendarType } = require("../src/EKCalendarType");
 
+    // GitHub's macos-latest runners have no Calendar database and no TCC
+    // grant, so calls that touch the live store (eventStoreIdentifier,
+    // commit) fail in ways that are not bugs in this package. Gate those
+    // on authorization so the rest of the suite still runs as a build /
+    // import / shape-contract smoke harness. The check has to happen at
+    // describe-eval time — `it` selection is decided before `beforeAll`
+    // runs, so deferring this would always pick `it.skip`.
+    const hasEventAccess =
+        EKEventStore.authorizationStatus(EKEntityType.EVENT) ===
+        EKAuthorizationStatus.FULL_ACCESS;
+    const itIfAuthorized = hasEventAccess ? it : it.skip;
+
     describe("EKEventStore native smoke", () => {
         let store: any;
 
@@ -24,7 +36,7 @@ if (!isMac) {
             store = EKEventStore.init();
         });
 
-        it("exposes a non-empty eventStoreIdentifier", () => {
+        itIfAuthorized("exposes a non-empty eventStoreIdentifier", () => {
             expect(typeof store.eventStoreIdentifier).toBe("string");
             expect(store.eventStoreIdentifier.length).toBeGreaterThan(0);
         });
@@ -216,7 +228,7 @@ if (!isMac) {
             ).rejects.toBe(sentinel);
         });
 
-        it("commit() with no pending changes does not throw", () => {
+        itIfAuthorized("commit() with no pending changes does not throw", () => {
             expect(() => store.commit()).not.toThrow();
         });
 
