@@ -1,9 +1,9 @@
 {
     "name": "eventkit-js",
-    "version": "3.2.0",
+    "version": "3.2.1",
     "description": "Node-API wrapper for Apple's EventKit framework — read and write Calendar events and Reminders from Node.js on macOS.",
     "author": "anthdono",
-    "license": "ISC",
+    "license": "GPL-3.0-or-later",
     "main": "lib/EventKit.js",
     "types": "lib/EventKit.d.ts",
     "engines": {

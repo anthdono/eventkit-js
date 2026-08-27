@@ -207,4 +207,4 @@ See [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## License
 
-ISC, see [`LICENSE`](./LICENSE).
+GPL-3.0-or-later, see [`LICENSE`](./LICENSE).

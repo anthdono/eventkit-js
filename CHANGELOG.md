@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1] — 2026-08-27
+
+Metadata correction: `package.json` declared `"license": "ISC"` while the checked-in `LICENSE` file was the full GPL-3.0 text — GitHub's license badge (which reads `LICENSE`) and npm/tooling (which reads `package.json`) disagreed. `package.json` and the README now both say `GPL-3.0-or-later`, matching `LICENSE`. No code changes.
+
 ## [3.2.0] — 2026-04-27
 
 Closes the last shallow-proxy field on the public surface. `EKAlarm.structuredLocation` was deferred to a string proxy when alarms shipped in 3.0.0 (the comment said "deepens when instruction 16 ships" — instruction 16 deepened the field on `EKEvent` but missed the alarm one). 3.2.0 finishes the job.
